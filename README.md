@@ -8,11 +8,11 @@ A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) skill that guide
 
 ```bash
 # Auto-detect: installs to Claude Code and/or Cursor if detected
-npx waffo-integrate
+npx @waffo/waffo-integrate
 
 # Or specify target explicitly
-npx waffo-integrate --claude
-npx waffo-integrate --cursor
+npx @waffo/waffo-integrate --claude
+npx @waffo/waffo-integrate --cursor
 ```
 
 ### Claude Code only
@@ -23,7 +23,7 @@ claude /install-skill waffo-com/waffo-integrate
 
 ### Cursor post-install
 
-After running `npx waffo-integrate --cursor`, add to your `.cursorrules` (or `.cursor/rules/waffo-integrate.mdc`):
+After running `npx @waffo/waffo-integrate --cursor`, add to your `.cursorrules` (or `.cursor/rules/waffo-integrate.mdc`):
 
 ```
 When the user asks to integrate Waffo SDK, read and follow the instructions in .cursor/skills/waffo-integrate/SKILL.md.
