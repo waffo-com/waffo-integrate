@@ -1,0 +1,29 @@
+{
+  "name": "waffo-integrate",
+  "version": "1.0.0",
+  "description": "Claude Code / Cursor skill for integrating Waffo Payment SDK (Node.js / Java / Go)",
+  "bin": {
+    "waffo-integrate": "./bin/install.js"
+  },
+  "files": [
+    "bin/",
+    "SKILL.md",
+    "references/",
+    "docs/"
+  ],
+  "keywords": [
+    "waffo",
+    "payment",
+    "sdk",
+    "claude-code",
+    "cursor",
+    "skill",
+    "integration"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/waffo-com/waffo-integrate.git"
+  },
+  "license": "MIT",
+  "author": "Waffo"
+}
