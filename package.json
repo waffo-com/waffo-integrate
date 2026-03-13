@@ -1,5 +1,5 @@
 {
-  "name": "waffo-integrate",
+  "name": "@waffo/waffo-integrate",
   "version": "1.0.0",
   "description": "Claude Code / Cursor skill for integrating Waffo Payment SDK (Node.js / Java / Go)",
   "bin": {
