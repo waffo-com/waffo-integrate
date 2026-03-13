@@ -1,0 +1,125 @@
+{
+  "skill_name": "waffo-integrate",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I'm building a Node.js Express e-commerce backend. I need to integrate Waffo payment — I need to accept credit card payments and handle refunds. My project is at ./my-project. I already have the SDK credentials in .env.",
+      "expected_output": "Generate Node.js code with order create, order inquiry, refund, refund inquiry. Should use correct field names (orderCurrency, orderAmount), include paymentRequestId generation with 32-char limit, proper error handling, and sandbox test files.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "uses_orderCurrency_not_currency",
+          "type": "output_contains",
+          "check": "Generated order create code uses 'orderCurrency' (not 'currency' which is for subscriptions)",
+          "critical": true
+        },
+        {
+          "name": "request_id_32_char",
+          "type": "output_contains",
+          "check": "Request ID generation uses UUID without dashes (32 chars max)",
+          "critical": true
+        },
+        {
+          "name": "includes_refund_code",
+          "type": "output_contains",
+          "check": "Generates refund operation code with refundRequestId",
+          "critical": true
+        },
+        {
+          "name": "sandbox_test_generated",
+          "type": "output_contains",
+          "check": "Generates test file that calls real Sandbox API with assertions",
+          "critical": false
+        },
+        {
+          "name": "error_diagnostic_in_test",
+          "type": "output_contains",
+          "check": "Test assertions include diagnostic output (code, message, data) before expect()",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I need to add subscription billing to my Node.js project at ./my-project. Monthly subscription, $9.99/month. I want create subscription, query status, and get the management page URL. SDK credentials already in .env.",
+      "expected_output": "Generate subscription code using 'currency'/'amount' (NOT orderCurrency/orderAmount), periodType='MONTHLY', periodInterval='1' (string), includes goodsInfo with goodsUrl, payMethodType in paymentInfo, and manage() call. Test should handle A0028 for non-active subscriptions.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "uses_currency_not_orderCurrency",
+          "type": "output_contains",
+          "check": "Subscription create uses 'currency' and 'amount' (not orderCurrency/orderAmount)",
+          "critical": true
+        },
+        {
+          "name": "correct_periodType",
+          "type": "output_contains",
+          "check": "Uses periodType='MONTHLY' (not 'MONTH' or 'YEAR' or 'DAY')",
+          "critical": true
+        },
+        {
+          "name": "periodInterval_is_string",
+          "type": "output_contains",
+          "check": "periodInterval is a string value like '1' (not number 1)",
+          "critical": true
+        },
+        {
+          "name": "includes_goodsInfo",
+          "type": "output_contains",
+          "check": "Subscription create includes goodsInfo with goodsUrl",
+          "critical": true
+        },
+        {
+          "name": "includes_payMethodType",
+          "type": "output_contains",
+          "check": "Subscription create includes paymentInfo.payMethodType",
+          "critical": true
+        },
+        {
+          "name": "manage_handles_inactive",
+          "type": "output_contains",
+          "check": "manage() test handles non-active subscription gracefully (expects A0028 or similar error)",
+          "critical": false
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "我要在一个 Java Spring Boot 项目里集成 Waffo 支付，需要接受付款和接收 webhook 通知。项目在 ./my-project，凭据已经配好了在环境变量里。",
+      "expected_output": "Generate Java Spring Boot code with order create, webhook handler (Express → Spring Boot controller). Webhook handler should verify signature, parse notification, return signed response with X-SIGNATURE header. Code should use WaffoConfig builder pattern.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "java_spring_boot_webhook",
+          "type": "output_contains",
+          "check": "Generates Spring Boot @RestController with webhook endpoint that handles X-SIGNATURE",
+          "critical": true
+        },
+        {
+          "name": "java_correct_field_names",
+          "type": "output_contains",
+          "check": "Uses orderCurrency/orderAmount for order create (not currency/amount)",
+          "critical": true
+        },
+        {
+          "name": "java_config_builder",
+          "type": "output_contains",
+          "check": "Uses WaffoConfig.builder() pattern for SDK initialization",
+          "critical": true
+        },
+        {
+          "name": "webhook_signature_response",
+          "type": "output_contains",
+          "check": "Webhook handler returns signed response body and sets X-SIGNATURE header",
+          "critical": true
+        },
+        {
+          "name": "java_uuid_32_char",
+          "type": "output_contains",
+          "check": "Java request ID uses UUID.randomUUID().toString().replace(\"-\", \"\") for 32-char limit",
+          "critical": true
+        }
+      ]
+    }
+  ]
+}
