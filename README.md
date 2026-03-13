@@ -4,21 +4,26 @@ A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) skill that guide
 
 ## Install
 
-### Claude Code
+### One command (npm)
+
+```bash
+# Auto-detect: installs to Claude Code and/or Cursor if detected
+npx waffo-integrate
+
+# Or specify target explicitly
+npx waffo-integrate --claude
+npx waffo-integrate --cursor
+```
+
+### Claude Code only
 
 ```bash
 claude /install-skill waffo-com/waffo-integrate
 ```
 
-### Cursor
+### Cursor post-install
 
-1. Clone this repo into your project:
-
-```bash
-git clone https://github.com/waffo-com/waffo-integrate.git .cursor/skills/waffo-integrate
-```
-
-2. Add to your `.cursorrules` (or `.cursor/rules/waffo-integrate.mdc`):
+After running `npx waffo-integrate --cursor`, add to your `.cursorrules` (or `.cursor/rules/waffo-integrate.mdc`):
 
 ```
 When the user asks to integrate Waffo SDK, read and follow the instructions in .cursor/skills/waffo-integrate/SKILL.md.
