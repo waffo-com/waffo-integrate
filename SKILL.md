@@ -427,8 +427,7 @@ When the developer has questions beyond basic integration (troubleshooting, adva
 | Node.js code patterns | Read `references/node.md` |
 | Java code patterns | Read `references/java.md` |
 | Go code patterns | Read `references/go.md` |
-
-<!-- Future: when an open-source repo is available, add external links here (SDK docs, FAQ, troubleshooting guides) -->
+| FAQ, troubleshooting, best practices | Read `docs/INDEX.md` — knowledge base index with links to scenario-specific articles |
 
 ---
 
