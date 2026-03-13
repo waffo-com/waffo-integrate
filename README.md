@@ -4,9 +4,30 @@ A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) skill that guide
 
 ## Install
 
+### Claude Code
+
 ```bash
 claude /install-skill waffo-com/waffo-integrate
 ```
+
+### Cursor
+
+1. Clone this repo into your project:
+
+```bash
+git clone https://github.com/waffo-com/waffo-integrate.git .cursor/skills/waffo-integrate
+```
+
+2. Add to your `.cursorrules` (or `.cursor/rules/waffo-integrate.mdc`):
+
+```
+When the user asks to integrate Waffo SDK, read and follow the instructions in .cursor/skills/waffo-integrate/SKILL.md.
+Load reference files from .cursor/skills/waffo-integrate/references/ as directed by SKILL.md.
+```
+
+### Manual (any AI coding assistant)
+
+Copy the `SKILL.md` and `references/` directory into your project. Point your AI assistant to read `SKILL.md` when integrating Waffo SDK.
 
 ## What it does
 
@@ -64,7 +85,7 @@ Consistent failure patterns without the skill across all 3 iterations:
 
 ## Requirements
 
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Cursor](https://cursor.sh), or any AI coding assistant that can read markdown instructions
 - A Waffo merchant account (for Sandbox testing)
 
 ## License
