@@ -14,6 +14,7 @@ Step 1: Detect or ask language → Node.js / Java / Go
 Step 2: Detect or ask project status → existing project / new project
 Step 3: Feature selection (interactive Q&A, one at a time)
 Step 4: Framework selection (if Webhook chosen)
+Step 4.5: Subscription event selection (if Subscription + Webhook chosen)
 Step 5: Present code for review
 Step 6: Write to project on approval
 Step 7: Generate Sandbox tests
@@ -68,7 +69,7 @@ Operations: `subscription().create()`, `subscription().inquiry()`, `subscription
 
 Events: `PAYMENT_NOTIFICATION`, `REFUND_NOTIFICATION`, `SUBSCRIPTION_STATUS_NOTIFICATION`, `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION`, `SUBSCRIPTION_CHANGE_NOTIFICATION`
 
-Only register handlers for events relevant to selected features. For example, if the developer only chose Order Payment + Refund, only register `onPayment` and `onRefund`.
+Only register handlers for events relevant to selected features. For example, if the developer only chose Order Payment + Refund, only register `onPayment` and `onRefund`. If the developer also chose Subscription, defer subscription event selection to Step 4.5.
 
 **5. Merchant Config Query** (optional, less common)
 > "Do you need to query your merchant configuration (supported currencies, merchant status)?"
@@ -99,6 +100,23 @@ If the developer selected Webhook, ask about their web framework.
 | Go | Gin | Echo, Fiber, Chi |
 
 Ask: "What web framework are you using? If you're not sure, I recommend [Express/Spring Boot/Gin] — it's the most widely used for [language]."
+
+## Step 4.5: Subscription Event Selection (Conditional)
+
+**Only when the developer selected both Subscription and Webhook in Step 3.**
+
+Ask: "Subscription has several webhook events — which ones matter for your use case?"
+
+| Use Case | Recommended Event | Handler |
+|----------|-------------------|---------|
+| Subscription activation/cancellation | `SUBSCRIPTION_STATUS_NOTIFICATION` | `onSubscriptionStatus` |
+| Final renewal result of each period | `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION` | `onSubscriptionPeriodChanged` |
+| Subscription change (upgrade/downgrade) result | `SUBSCRIPTION_CHANGE_NOTIFICATION` | `onSubscriptionChange` |
+| Track every payment attempt (including retries) | `PAYMENT_NOTIFICATION` | `onPayment` |
+
+**Default recommendation**: Most subscription integrations need `SUBSCRIPTION_STATUS_NOTIFICATION` + `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION`. Only add the others if the developer has a specific need.
+
+Only register the handlers the developer selected in Step 5.
 
 ## Step 5: Present Code
 
