@@ -1,6 +1,6 @@
 ---
 name: waffo-integrate
-description: Interactive guide for integrating Waffo Payment SDK into projects. Walks developers through selecting features (payments, refunds, subscriptions, webhooks), choosing language (Node.js/Java/Go), and generates production-ready integration code with Sandbox tests. Use this skill whenever the user mentions integrating Waffo SDK, adding payment functionality with Waffo, setting up Waffo webhooks, or asks about Waffo SDK usage. Trigger phrases include "integrate waffo", "waffo sdk", "waffo payment", "接入waffo", "集成waffo", "接入支付", "waffo webhook setup".
+description: Interactive guide for integrating Waffo Payment SDK into projects. Walks developers through selecting features (payments, refunds, subscriptions, webhooks), choosing language (Node.js/Java/Go), and generates production-ready integration code with Sandbox tests. Also runs automated acceptance test suites (Step 9) to verify integration correctness. Use this skill whenever the user mentions integrating Waffo SDK, adding payment functionality with Waffo, setting up Waffo webhooks, asks about Waffo SDK usage, or wants to run acceptance tests. Trigger phrases include "integrate waffo", "waffo sdk", "waffo payment", "接入waffo", "集成waffo", "接入支付", "waffo webhook setup", "run test cases", "acceptance testing", "验收测试", "跑测试用例", "UAT".
 ---
 
 # Waffo SDK Integration Guide
@@ -19,6 +19,7 @@ Step 5: Present code for review
 Step 6: Write to project on approval
 Step 7: Generate Sandbox tests
 Step 8: Local end-to-end verification (if Webhook selected)
+Step 9: Acceptance test execution (run full test case suite)
 ```
 
 ---
@@ -478,3 +479,116 @@ When the developer has questions beyond basic integration (troubleshooting, adva
 12. **manage() API**: `subscription().manage()` returns a `managementUrl` for the subscription management page. It only works when the subscription is `ACTIVE` (payment completed). Request requires `subscriptionRequest` or `subscriptionId`. The Sandbox management URL includes `mock=true` automatically.
 
 13. **payMethodType is REQUIRED for subscriptions**: `paymentInfo.payMethodType` must be set for subscription create — without it the server returns A0003. Default to `'CREDITCARD,DEBITCARD,APPLEPAY,GOOGLEPAY'` (comma-separated string supporting multiple payment methods). This is different from `payMethodName` which is optional. Do NOT omit `payMethodType` or replace it with `payMethodName`.
+
+---
+
+## Step 9: Acceptance Test Execution
+
+Run the full merchant integration acceptance test suite (65 test cases: 30 payment + 35 subscription) against Sandbox. Tests are executed by the AI in phases, with most cases fully automated.
+
+**Trigger phrases**: "run test cases", "acceptance testing", "验收测试", "跑测试用例", "UAT"
+
+### Entry Conditions
+
+Step 9 can be entered two ways:
+
+1. **After Step 8** — natural continuation after E2E verification
+2. **Direct trigger** — merchant says "跑测试用例" on an already-integrated project
+
+For direct entry, re-establish context first:
+- Detect language (same as Step 1)
+- Check for credentials (same as Step 7)
+- Ask which product was integrated: ONE_TIME_PAYMENT / SUBSCRIPTION / both
+- Ask which interfaces were integrated (Create Order, Inquiry, Cancel, Refund, Webhook, etc.)
+
+### Reference Data
+
+**Before executing any test, read `references/acceptance-tests.md`** — it contains:
+- §1: Sandbox test card numbers (success/failure per card brand)
+- §2: Magic amount table (amounts that trigger specific error codes)
+- §3-§4: Full test case catalog with expected results
+- §5: Phase execution dependencies
+- §6: Playwright checkout automation protocol
+- §7: Signature failure simulation protocol
+- §8: Report template
+
+### Test Execution Modes
+
+| Mode | Description | Tool |
+|------|------------|------|
+| **API** | Direct SDK API call, assert response code/status | Generate & run standalone script |
+| **Playwright** | Fill test card on checkout page, wait for payment result | Playwright MCP browser tools |
+| **Webhook** | Verify notification received + signature valid | Check tunnel logs or debug endpoint |
+
+### Execution Protocol
+
+Execute phases **sequentially** — each phase may depend on results from previous phases.
+
+**For each phase:**
+1. Announce: "Phase {N}: {description} ({count} test cases)"
+2. Generate a standalone executable script in the merchant's language for API-mode tests
+3. Run the script and parse results
+4. For Playwright-mode tests: use Playwright MCP to automate checkout
+5. For Webhook-mode tests: verify webhook was received via tunnel inspection or debug endpoint
+6. Output phase summary: PASS/FAIL/SKIP per test case
+
+**Payment Phases** (if ONE_TIME_PAYMENT integrated):
+```
+Phase 1: API error scenarios (1.3-1.6, 4.4-4.5, 5.5-5.6) — magic amounts trigger error codes
+Phase 2: Payment success (1.1) — Playwright fills success test card on checkout
+Phase 3: Payment failure (1.2) — Playwright fills failure test card
+Phase 4: Inquiry (2.1-2.3) — query orders from Phase 2/3
+Phase 5: Cancel (4.1-4.3) — cancel tests using Phase 2's order
+Phase 6: Payment webhooks (3.1-3.3) — verify notifications from Phase 2/3 + signature failure test
+Phase 7: Refund (5.1-5.6, 6.1-6.4) — refund Phase 2's paid order
+Phase 8: Refund webhooks (7.1-7.3) — verify refund notifications
+```
+
+**Subscription Phases** (if SUBSCRIPTION integrated):
+```
+Phase 9: Subscription error scenarios (S-1.5 to S-1.8)
+Phase 10: Subscription payment (S-1.1, S-1.2) — Playwright checkout
+Phase 11: Subscription inquiry (S-2.1 to S-2.3)
+Phase 12: Subscription notifications (S-3.1 to S-3.5, S-4.1, S-4.4)
+Phase 13: Next period billing (S-1.3, S-1.4, S-4.2, S-4.3) — Playwright on management page
+Phase 14: Subscription cancel (S-5.1, S-5.6, S-5.7, S-3.3, S-3.4)
+Phase 15: Order inquiry for subscription payments (S-6.1, S-6.2)
+Phase 16: Subscription refund (reuse payment refund tests on subscription order)
+```
+
+### Scope Filtering
+
+Only execute test cases for interfaces the merchant actually integrated:
+- No Cancel interface → skip Phase 5 (4.1-4.5)
+- No Refund interface → skip Phase 7-8 (5.x, 6.x, 7.x)
+- No Webhook → skip Phase 6, 8 (3.x, 7.x) and all webhook verification in other phases
+- No Subscription → skip Phase 9-16
+
+For each contracted pay method, repeat Playwright checkout tests (Phase 2/3/10) with the corresponding test card from §1.
+
+### Playwright Checkout Automation
+
+When a test requires payment completion:
+1. Create order/subscription via API → get checkout URL from `orderAction.webUrl` or `subscriptionAction.webUrl`
+2. Use Playwright MCP: `browser_navigate` → `browser_snapshot` → `browser_fill_form` (card details from §1) → submit
+3. `browser_wait_for` redirect to `successRedirectUrl` or `failedRedirectUrl`
+4. Poll inquiry API every 3s until terminal status or 120s timeout
+
+**If Playwright MCP unavailable**: Output the checkout URL + test card info, ask merchant to complete manually, then continue polling.
+
+### Webhook Verification
+
+For webhook test cases:
+- **ngrok**: Query `http://localhost:4040/api/requests/http` to find matching POST requests
+- **cloudflared**: Query the `/waffo/last-webhook` debug endpoint (from Step 8)
+- **Signature failure test**: Use `curl` with forged `X-SIGNATURE` header (see §7 protocol)
+
+### Acceptance Report
+
+After all phases complete, generate the report per §8 template. Include:
+- Test ID, scenario name, result (PASS/FAIL/SKIP), details
+- Summary: passed/failed/skipped counts
+- Failed case details with actual vs expected
+- Skipped case reasons
+
+Print to console AND save to `waffo-acceptance-report-{YYYYMMDD}.txt` in project root.

@@ -6,6 +6,12 @@ Extended documentation for common scenarios, troubleshooting, and best practices
 
 ---
 
+## References
+
+| Topic | Document | Description |
+|-------|----------|-------------|
+| Acceptance Test Suite | [../references/acceptance-tests.md](../references/acceptance-tests.md) | 65 test cases (payment + subscription) with test cards, magic amounts, and execution protocol for Step 9 |
+
 ## FAQ
 
 | Topic | Document | Description |
