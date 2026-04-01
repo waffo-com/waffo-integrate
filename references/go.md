@@ -39,15 +39,15 @@ func GetClient() *waffogo.Waffo {
 			env = config.Production
 		}
 
-		cfg := config.WaffoConfig{
-			ApiKey:         os.Getenv("WAFFO_API_KEY"),
+		cfg := &config.WaffoConfig{
+			APIKey:         os.Getenv("WAFFO_API_KEY"),
 			PrivateKey:     os.Getenv("WAFFO_PRIVATE_KEY"),
 			WaffoPublicKey: os.Getenv("WAFFO_PUBLIC_KEY"),
-			MerchantId:     os.Getenv("WAFFO_MERCHANT_ID"),
+			MerchantID:     os.Getenv("WAFFO_MERCHANT_ID"),
 			Environment:    env,
 		}
 
-		instance = waffogo.NewWaffo(cfg)
+		instance = waffogo.New(cfg)
 	})
 	return instance
 }
@@ -71,13 +71,13 @@ import (
 )
 
 type CreatePaymentInput struct {
-	MerchantOrderId    string
+	MerchantOrderID    string
 	Amount             string
 	Currency           string
 	Description        string
-	NotifyUrl          string
-	SuccessRedirectUrl string
-	UserId             string
+	NotifyURL          string
+	SuccessRedirectURL string
+	UserID             string
 	UserEmail          string
 	UserTerminal       string // WEB | APP | WAP | SYSTEM (default: WEB)
 	PayMethodType      string // optional: "CREDITCARD", "EWALLET"
@@ -97,16 +97,16 @@ func CreatePayment(ctx context.Context, input CreatePaymentInput) (*order.Create
 		userTerminal = "WEB"
 	}
 
-	params := order.CreateOrderParams{
-		PaymentRequestId:   genRequestID(),
-		MerchantOrderId:    input.MerchantOrderId,
+	params := &order.CreateOrderParams{
+		PaymentRequestID:   genRequestID(),
+		MerchantOrderID:    input.MerchantOrderID,
 		OrderCurrency:      input.Currency,
 		OrderAmount:        input.Amount,
 		OrderDescription:   input.Description,
-		NotifyUrl:          input.NotifyUrl,
-		SuccessRedirectUrl: input.SuccessRedirectUrl,
+		NotifyURL:          input.NotifyURL,
+		SuccessRedirectURL: input.SuccessRedirectURL,
 		UserInfo: &order.UserInfo{
-			UserId:       input.UserId,
+			UserID:       input.UserID,
 			UserEmail:    input.UserEmail,
 			UserTerminal: userTerminal,
 		},
@@ -117,7 +117,7 @@ func CreatePayment(ctx context.Context, input CreatePaymentInput) (*order.Create
 		},
 	}
 
-	resp, err := client.Order().Create(ctx, params)
+	resp, err := client.Order().Create(ctx, params, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create payment error: %w", err)
 	}
@@ -127,16 +127,15 @@ func CreatePayment(ctx context.Context, input CreatePaymentInput) (*order.Create
 			resp.GetCode(), resp.GetMessage())
 	}
 
-	data := resp.GetData()
-	return &data, nil
+	return resp.GetData(), nil
 }
 
-func QueryOrder(ctx context.Context, paymentRequestId string) (*order.InquiryOrderData, error) {
+func QueryOrder(ctx context.Context, paymentRequestID string) (*order.InquiryOrderData, error) {
 	client := GetClient()
 
-	resp, err := client.Order().Inquiry(ctx, order.InquiryOrderParams{
-		PaymentRequestId: paymentRequestId,
-	})
+	resp, err := client.Order().Inquiry(ctx, &order.InquiryOrderParams{
+		PaymentRequestID: paymentRequestID,
+	}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("inquiry error: %w", err)
 	}
@@ -146,16 +145,15 @@ func QueryOrder(ctx context.Context, paymentRequestId string) (*order.InquiryOrd
 			resp.GetCode(), resp.GetMessage())
 	}
 
-	data := resp.GetData()
-	return &data, nil
+	return resp.GetData(), nil
 }
 
-func CancelOrder(ctx context.Context, paymentRequestId string) (*order.CancelOrderData, error) {
+func CancelOrder(ctx context.Context, paymentRequestID string) (*order.CancelOrderData, error) {
 	client := GetClient()
 
-	resp, err := client.Order().Cancel(ctx, order.CancelOrderParams{
-		PaymentRequestId: paymentRequestId,
-	})
+	resp, err := client.Order().Cancel(ctx, &order.CancelOrderParams{
+		PaymentRequestID: paymentRequestID,
+	}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("cancel error: %w", err)
 	}
@@ -165,8 +163,7 @@ func CancelOrder(ctx context.Context, paymentRequestId string) (*order.CancelOrd
 			resp.GetCode(), resp.GetMessage())
 	}
 
-	data := resp.GetData()
-	return &data, nil
+	return resp.GetData(), nil
 }
 ```
 
@@ -181,7 +178,6 @@ package waffo
 import (
 	"context"
 	"fmt"
-
 	"strings"
 
 	"github.com/google/uuid"
@@ -189,17 +185,18 @@ import (
 	"github.com/waffo-com/waffo-go/types/refund"
 )
 
-func RefundOrder(ctx context.Context, origPaymentRequestId, refundAmount, refundReason string) (*order.RefundOrderData, error) {
+func RefundOrder(ctx context.Context, acquiringOrderID, refundAmount, refundReason, notifyURL string) (*order.RefundOrderData, error) {
 	client := GetClient()
 
-	params := order.RefundOrderParams{
-		RefundRequestId:      strings.ReplaceAll(uuid.New().String(), "-", ""),
-		OrigPaymentRequestId: origPaymentRequestId,
-		RefundAmount:         refundAmount,
-		RefundReason:         refundReason,
+	params := &order.RefundOrderParams{
+		RefundRequestID:  strings.ReplaceAll(uuid.New().String(), "-", ""),
+		AcquiringOrderID: acquiringOrderID,
+		RefundAmount:     refundAmount,
+		RefundReason:     refundReason,
+		NotifyURL:        notifyURL,
 	}
 
-	resp, err := client.Order().Refund(ctx, params)
+	resp, err := client.Order().Refund(ctx, params, nil)
 	if err != nil {
 		return nil, fmt.Errorf("refund error: %w", err)
 	}
@@ -209,16 +206,15 @@ func RefundOrder(ctx context.Context, origPaymentRequestId, refundAmount, refund
 			resp.GetCode(), resp.GetMessage())
 	}
 
-	data := resp.GetData()
-	return &data, nil
+	return resp.GetData(), nil
 }
 
-func QueryRefund(ctx context.Context, refundRequestId string) (*refund.InquiryRefundData, error) {
+func QueryRefund(ctx context.Context, refundRequestID string) (*refund.InquiryRefundData, error) {
 	client := GetClient()
 
-	resp, err := client.Refund().Inquiry(ctx, refund.InquiryRefundParams{
-		RefundRequestId: refundRequestId,
-	})
+	resp, err := client.Refund().Inquiry(ctx, &refund.InquiryRefundParams{
+		RefundRequestID: refundRequestID,
+	}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("refund inquiry error: %w", err)
 	}
@@ -228,8 +224,7 @@ func QueryRefund(ctx context.Context, refundRequestId string) (*refund.InquiryRe
 			resp.GetCode(), resp.GetMessage())
 	}
 
-	data := resp.GetData()
-	return &data, nil
+	return resp.GetData(), nil
 }
 ```
 
@@ -244,7 +239,6 @@ package waffo
 import (
 	"context"
 	"fmt"
-
 	"strings"
 
 	"github.com/google/uuid"
@@ -252,58 +246,65 @@ import (
 )
 
 type CreateSubscriptionInput struct {
-	MerchantSubscriptionId string
+	MerchantSubscriptionID string
 	Amount                 string
 	Currency               string
 	Description            string
-	NotifyUrl              string
-	UserId                 string
+	NotifyURL              string
+	SuccessRedirectURL     string
+	UserID                 string
 	UserEmail              string
-	ProductId              string
-	ProductName            string
+	UserTerminal           string // WEB | APP | WAP | SYSTEM (default: WEB)
 	PeriodType             string // DAILY, WEEKLY, MONTHLY
 	PeriodInterval         string
-	GoodsId                string
+	GoodsID                string
 	GoodsName              string
-	GoodsUrl               string
-	SuccessRedirectUrl     string
+	GoodsURL               string
+	PayMethodType          string // default: "CREDITCARD,DEBITCARD,APPLEPAY,GOOGLEPAY"
 }
 
 func CreateSubscription(ctx context.Context, input CreateSubscriptionInput) (*subscription.CreateSubscriptionData, error) {
 	client := GetClient()
 
-	params := subscription.CreateSubscriptionParams{
+	userTerminal := input.UserTerminal
+	if userTerminal == "" {
+		userTerminal = "WEB"
+	}
+
+	payMethodType := input.PayMethodType
+	if payMethodType == "" {
+		payMethodType = "CREDITCARD,DEBITCARD,APPLEPAY,GOOGLEPAY"
+	}
+
+	params := &subscription.CreateSubscriptionParams{
 		SubscriptionRequest:    strings.ReplaceAll(uuid.New().String(), "-", ""),
-		MerchantSubscriptionId: input.MerchantSubscriptionId,
+		MerchantSubscriptionID: input.MerchantSubscriptionID,
 		Currency:               input.Currency,
 		Amount:                 input.Amount,
-		OrderDescription:       input.Description,
-		NotifyUrl:              input.NotifyUrl,
-		SuccessRedirectUrl:     input.SuccessRedirectUrl,
+		NotifyURL:              input.NotifyURL,
+		SuccessRedirectURL:     input.SuccessRedirectURL,
 		ProductInfo: &subscription.ProductInfo{
-			ProductId:      input.ProductId,
-			ProductName:    input.ProductName,
 			Description:    input.Description,
 			PeriodType:     input.PeriodType,
 			PeriodInterval: input.PeriodInterval,
 		},
-		GoodsInfo: &subscription.GoodsInfo{
-			GoodsId:   input.GoodsId,
+		GoodsInfo: &subscription.SubscriptionGoodsInfo{
+			GoodsID:   input.GoodsID,
 			GoodsName: input.GoodsName,
-			GoodsUrl:  input.GoodsUrl,
+			GoodsURL:  input.GoodsURL,
 		},
-		UserInfo: &subscription.UserInfo{
-			UserId:       input.UserId,
+		UserInfo: &subscription.SubscriptionUserInfo{
+			UserID:       input.UserID,
 			UserEmail:    input.UserEmail,
-			UserTerminal: input.UserTerminal, // WEB for PC, APP for mobile/tablet
+			UserTerminal: userTerminal,
 		},
-		PaymentInfo: &subscription.PaymentInfo{
+		PaymentInfo: &subscription.SubscriptionPaymentInfo{
 			ProductName:   "SUBSCRIPTION",
-			PayMethodType: "CREDITCARD,DEBITCARD,APPLEPAY,GOOGLEPAY",
+			PayMethodType: payMethodType,
 		},
 	}
 
-	resp, err := client.Subscription().Create(ctx, params)
+	resp, err := client.Subscription().Create(ctx, params, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create subscription error: %w", err)
 	}
@@ -313,16 +314,15 @@ func CreateSubscription(ctx context.Context, input CreateSubscriptionInput) (*su
 			resp.GetCode(), resp.GetMessage())
 	}
 
-	data := resp.GetData()
-	return &data, nil
+	return resp.GetData(), nil
 }
 
 func QuerySubscription(ctx context.Context, subscriptionRequest string) (*subscription.InquirySubscriptionData, error) {
 	client := GetClient()
 
-	resp, err := client.Subscription().Inquiry(ctx, subscription.InquirySubscriptionParams{
+	resp, err := client.Subscription().Inquiry(ctx, &subscription.InquirySubscriptionParams{
 		SubscriptionRequest: subscriptionRequest,
-	})
+	}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("inquiry error: %w", err)
 	}
@@ -332,16 +332,15 @@ func QuerySubscription(ctx context.Context, subscriptionRequest string) (*subscr
 			resp.GetCode(), resp.GetMessage())
 	}
 
-	data := resp.GetData()
-	return &data, nil
+	return resp.GetData(), nil
 }
 
-func CancelSubscription(ctx context.Context, subscriptionRequest string) (*subscription.CancelSubscriptionData, error) {
+func CancelSubscription(ctx context.Context, subscriptionID string) (*subscription.CancelSubscriptionData, error) {
 	client := GetClient()
 
-	resp, err := client.Subscription().Cancel(ctx, subscription.CancelSubscriptionParams{
-		SubscriptionRequest: subscriptionRequest,
-	})
+	resp, err := client.Subscription().Cancel(ctx, &subscription.CancelSubscriptionParams{
+		SubscriptionID: subscriptionID,
+	}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("cancel error: %w", err)
 	}
@@ -351,8 +350,7 @@ func CancelSubscription(ctx context.Context, subscriptionRequest string) (*subsc
 			resp.GetCode(), resp.GetMessage())
 	}
 
-	data := resp.GetData()
-	return &data, nil
+	return resp.GetData(), nil
 }
 
 // ManageSubscription returns a management URL for the subscription.
@@ -360,11 +358,9 @@ func CancelSubscription(ctx context.Context, subscriptionRequest string) (*subsc
 func ManageSubscription(ctx context.Context, subscriptionRequest string) (string, error) {
 	client := GetClient()
 
-	params := subscription.ManageSubscriptionParams{
+	resp, err := client.Subscription().Manage(ctx, &subscription.ManageSubscriptionParams{
 		SubscriptionRequest: subscriptionRequest,
-	}
-
-	resp, err := client.Subscription().Manage(ctx, params)
+	}, nil)
 	if err != nil {
 		return "", fmt.Errorf("manage error: %w", err)
 	}
@@ -374,8 +370,84 @@ func ManageSubscription(ctx context.Context, subscriptionRequest string) (string
 			resp.GetCode(), resp.GetMessage())
 	}
 
-	managementURL := resp.GetData().ManagementURL
-	return managementURL, nil
+	return resp.GetData().ManagementURL, nil
+}
+
+// ChangeSubscription upgrades or downgrades an existing subscription.
+func ChangeSubscription(ctx context.Context, originSubscriptionRequest string, input CreateSubscriptionInput) (*subscription.ChangeSubscriptionData, error) {
+	client := GetClient()
+
+	userTerminal := input.UserTerminal
+	if userTerminal == "" {
+		userTerminal = "WEB"
+	}
+
+	payMethodType := input.PayMethodType
+	if payMethodType == "" {
+		payMethodType = "CREDITCARD,DEBITCARD,APPLEPAY,GOOGLEPAY"
+	}
+
+	params := &subscription.ChangeSubscriptionParams{
+		SubscriptionRequest:       strings.ReplaceAll(uuid.New().String(), "-", ""),
+		OriginSubscriptionRequest: originSubscriptionRequest,
+		Currency:                  input.Currency,
+		NotifyURL:                 input.NotifyURL,
+		SuccessRedirectURL:        input.SuccessRedirectURL,
+		ProductInfoList: []subscription.SubscriptionChangeProductInfo{
+			{
+				Description:    input.Description,
+				PeriodType:     input.PeriodType,
+				PeriodInterval: input.PeriodInterval,
+				Amount:         input.Amount,
+			},
+		},
+		MerchantInfo: &subscription.SubscriptionMerchantInfo{},
+		UserInfo: &subscription.SubscriptionUserInfo{
+			UserID:       input.UserID,
+			UserEmail:    input.UserEmail,
+			UserTerminal: userTerminal,
+		},
+		GoodsInfo: &subscription.SubscriptionGoodsInfo{
+			GoodsID:   input.GoodsID,
+			GoodsName: input.GoodsName,
+			GoodsURL:  input.GoodsURL,
+		},
+		PaymentInfo: &subscription.SubscriptionPaymentInfo{
+			ProductName:   "SUBSCRIPTION",
+			PayMethodType: payMethodType,
+		},
+	}
+
+	resp, err := client.Subscription().Change(ctx, params, nil)
+	if err != nil {
+		return nil, fmt.Errorf("change subscription error: %w", err)
+	}
+
+	if !resp.IsSuccess() {
+		return nil, fmt.Errorf("change subscription failed: code=%s, msg=%s",
+			resp.GetCode(), resp.GetMessage())
+	}
+
+	return resp.GetData(), nil
+}
+
+func ChangeInquiry(ctx context.Context, originSubscriptionRequest, subscriptionRequest string) (*subscription.ChangeInquiryData, error) {
+	client := GetClient()
+
+	resp, err := client.Subscription().ChangeInquiry(ctx, &subscription.ChangeInquiryParams{
+		OriginSubscriptionRequest: originSubscriptionRequest,
+		SubscriptionRequest:       subscriptionRequest,
+	}, nil)
+	if err != nil {
+		return nil, fmt.Errorf("change inquiry error: %w", err)
+	}
+
+	if !resp.IsSuccess() {
+		return nil, fmt.Errorf("change inquiry failed: code=%s, msg=%s",
+			resp.GetCode(), resp.GetMessage())
+	}
+
+	return resp.GetData(), nil
 }
 ```
 
@@ -391,9 +463,11 @@ package waffo
 
 import (
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/waffo-com/waffo-go/core"
 )
 
 func WebhookHandler() gin.HandlerFunc {
@@ -409,30 +483,48 @@ func WebhookHandler() gin.HandlerFunc {
 		signature := c.GetHeader("X-SIGNATURE")
 
 		handler := client.Webhook().
-			OnPayment(func(notification map[string]interface{}) {
-				result, _ := notification["result"].(map[string]interface{})
-				// TODO: Update your order status in database
-				_ = result
+			OnPayment(func(n *core.PaymentNotification) {
+				// Three-stage pattern: idempotency → lock → transaction
+				// Stage 1: Find local order by paymentRequestID, skip if already terminal
+				// Stage 2: Lock the order (mutex or DB row lock) to prevent duplicate processing
+				// Stage 3: In a DB transaction — update status + execute business logic
+				//
+				// Key fields: n.Result.PaymentRequestID, n.Result.OrderStatus, n.Result.AcquiringOrderID
+				// PAY_SUCCESS → execute business logic (e.g., add balance/quota)
+				// ORDER_CLOSE → mark order as expired/failed
+				log.Printf("Payment notification: paymentRequestID=%s, orderStatus=%s, acquiringOrderID=%s",
+					n.Result.PaymentRequestID, n.Result.OrderStatus, n.Result.AcquiringOrderID)
 			}).
-			OnRefund(func(notification map[string]interface{}) {
-				result, _ := notification["result"].(map[string]interface{})
-				// TODO: Update your refund status in database
-				_ = result
+			OnRefund(func(n *core.RefundNotification) {
+				// Three-stage pattern: idempotency → lock → transaction
+				// IMPORTANT: Refund notification identifies orders by acquiringOrderID (NOT paymentRequestID).
+				// You must have stored acquiringOrderID from the order create response to look up the local order.
+				// Key fields: n.Result.AcquiringOrderID, n.Result.RefundStatus, n.Result.RefundRequestID
+				// ORDER_FULLY_REFUNDED → mark order as refunded
+				// ORDER_PARTIALLY_REFUNDED → update partial refund state
+				log.Printf("Refund notification: acquiringOrderID=%s, refundStatus=%s, refundRequestID=%s",
+					n.Result.AcquiringOrderID, n.Result.RefundStatus, n.Result.RefundRequestID)
 			}).
-			OnSubscriptionStatus(func(notification map[string]interface{}) {
-				result, _ := notification["result"].(map[string]interface{})
-				// TODO: Update your subscription status in database
-				_ = result
+			OnSubscriptionStatus(func(n *core.SubscriptionStatusNotification) {
+				// Three-stage pattern: idempotency → lock → transaction
+				// Look up local record by subscriptionRequest (must have been created during subscription create)
+				// Key fields: n.Result.SubscriptionRequest, n.Result.SubscriptionStatus, n.Result.SubscriptionID
+				// ACTIVE → activate subscription / grant access
+				// MERCHANT_CANCELLED/USER_CANCELLED/EXPIRED/CLOSE → revoke access
+				log.Printf("Subscription status: subscriptionRequest=%s, status=%s, subscriptionID=%s",
+					n.Result.SubscriptionRequest, n.Result.SubscriptionStatus, n.Result.SubscriptionID)
 			}).
-			OnSubscriptionPeriodChanged(func(notification map[string]interface{}) {
-				result, _ := notification["result"].(map[string]interface{})
-				// TODO: Record billing period result
-				_ = result
+			OnSubscriptionPeriodChanged(func(n *core.SubscriptionPeriodChangedNotification) {
+				// Look up local record by subscriptionRequest
+				// Record the renewal and extend user access for the next billing period
+				log.Printf("Subscription period changed: subscriptionRequest=%s, subscriptionID=%s",
+					n.Result.SubscriptionRequest, n.Result.SubscriptionID)
 			}).
-			OnSubscriptionChange(func(notification map[string]interface{}) {
-				result, _ := notification["result"].(map[string]interface{})
-				// TODO: Handle subscription upgrade/downgrade
-				_ = result
+			OnSubscriptionChange(func(n *core.SubscriptionChangeNotification) {
+				// Handle upgrade/downgrade result
+				// Key fields: n.Result.SubscriptionChangeStatus, n.Result.OriginSubscriptionRequest, n.Result.SubscriptionRequest
+				log.Printf("Subscription change: changeStatus=%s, subscriptionID=%s",
+					n.Result.SubscriptionChangeStatus, n.Result.SubscriptionID)
 			})
 
 		webhookResult := handler.HandleWebhook(string(body), signature)
@@ -451,9 +543,11 @@ package waffo
 
 import (
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
+	"github.com/waffo-com/waffo-go/core"
 )
 
 func WebhookEchoHandler(c echo.Context) error {
@@ -467,11 +561,11 @@ func WebhookEchoHandler(c echo.Context) error {
 	signature := c.Request().Header.Get("X-SIGNATURE")
 
 	handler := client.Webhook().
-		OnPayment(func(notification map[string]interface{}) {
-			// TODO: Handle payment
+		OnPayment(func(n *core.PaymentNotification) {
+			log.Printf("Payment: status=%s", n.Result.OrderStatus)
 		}).
-		OnRefund(func(notification map[string]interface{}) {
-			// TODO: Handle refund
+		OnRefund(func(n *core.RefundNotification) {
+			log.Printf("Refund: status=%s", n.Result.RefundStatus)
 		})
 
 	webhookResult := handler.HandleWebhook(string(body), signature)
@@ -488,7 +582,10 @@ func WebhookEchoHandler(c echo.Context) error {
 package waffo
 
 import (
+	"log"
+
 	"github.com/gofiber/fiber/v2"
+	"github.com/waffo-com/waffo-go/core"
 )
 
 func WebhookFiberHandler(c *fiber.Ctx) error {
@@ -498,11 +595,11 @@ func WebhookFiberHandler(c *fiber.Ctx) error {
 	signature := c.Get("X-SIGNATURE")
 
 	handler := client.Webhook().
-		OnPayment(func(notification map[string]interface{}) {
-			// TODO: Handle payment
+		OnPayment(func(n *core.PaymentNotification) {
+			log.Printf("Payment: status=%s", n.Result.OrderStatus)
 		}).
-		OnRefund(func(notification map[string]interface{}) {
-			// TODO: Handle refund
+		OnRefund(func(n *core.RefundNotification) {
+			log.Printf("Refund: status=%s", n.Result.RefundStatus)
 		})
 
 	webhookResult := handler.HandleWebhook(body, signature)
@@ -545,36 +642,36 @@ func newTestClient(t *testing.T) *waffogo.Waffo {
 		t.Skip("Waffo credentials not configured, skipping Sandbox test")
 	}
 
-	cfg := config.WaffoConfig{
-		ApiKey:         os.Getenv("WAFFO_API_KEY"),
+	cfg := &config.WaffoConfig{
+		APIKey:         os.Getenv("WAFFO_API_KEY"),
 		PrivateKey:     os.Getenv("WAFFO_PRIVATE_KEY"),
 		WaffoPublicKey: os.Getenv("WAFFO_PUBLIC_KEY"),
-		MerchantId:     os.Getenv("WAFFO_MERCHANT_ID"),
+		MerchantID:     os.Getenv("WAFFO_MERCHANT_ID"),
 		Environment:    config.Sandbox,
 	}
 
-	return waffogo.NewWaffo(cfg)
+	return waffogo.New(cfg)
 }
 
-func genRequestID() string {
+func genTestRequestID() string {
 	return strings.ReplaceAll(uuid.New().String(), "-", "")
 }
 
 func TestCreateOrder(t *testing.T) {
 	client := newTestClient(t)
 	ctx := context.Background()
-	paymentRequestID := genRequestID()
+	paymentRequestID := genTestRequestID()
 
-	params := order.CreateOrderParams{
-		PaymentRequestId:   paymentRequestID,
-		MerchantOrderId:    "test-go-" + uuid.New().String()[:8],
+	params := &order.CreateOrderParams{
+		PaymentRequestID:   paymentRequestID,
+		MerchantOrderID:    "test-go-" + uuid.New().String()[:8],
 		OrderCurrency:      "USD",
 		OrderAmount:        "1.00",
 		OrderDescription:   "Go integration test order",
-		NotifyUrl:          "https://example.com/webhook",
-		SuccessRedirectUrl: "https://example.com/success",
+		NotifyURL:          "https://example.com/webhook",
+		SuccessRedirectURL: "https://example.com/success",
 		UserInfo: &order.UserInfo{
-			UserId:       "test-user",
+			UserID:       "test-user",
 			UserEmail:    "test@example.com",
 			UserTerminal: "WEB",
 		},
@@ -583,7 +680,7 @@ func TestCreateOrder(t *testing.T) {
 		},
 	}
 
-	resp, err := client.Order().Create(ctx, params)
+	resp, err := client.Order().Create(ctx, params, nil)
 	if err != nil {
 		t.Fatalf("Create order error: paymentRequestID=%s, err=%v", paymentRequestID, err)
 	}
@@ -594,37 +691,40 @@ func TestCreateOrder(t *testing.T) {
 	}
 
 	data := resp.GetData()
-	if data.AcquiringOrderId == "" {
-		t.Fatal("AcquiringOrderId is empty")
+	if data.AcquiringOrderID == "" {
+		t.Fatal("AcquiringOrderID is empty")
 	}
-	t.Logf("Order created: acquiringOrderId=%s", data.AcquiringOrderId)
+
+	// Use FetchRedirectURL() to get the checkout URL
+	redirectURL := data.FetchRedirectURL()
+	t.Logf("Order created: acquiringOrderID=%s, redirectURL=%s", data.AcquiringOrderID, redirectURL)
 }
 
 func TestQueryOrder(t *testing.T) {
 	client := newTestClient(t)
 	ctx := context.Background()
-	paymentRequestID := genRequestID()
+	paymentRequestID := genTestRequestID()
 
 	// Create first
-	_, err := client.Order().Create(ctx, order.CreateOrderParams{
-		PaymentRequestId:   paymentRequestID,
-		MerchantOrderId:    "test-go-" + uuid.New().String()[:8],
+	_, err := client.Order().Create(ctx, &order.CreateOrderParams{
+		PaymentRequestID:   paymentRequestID,
+		MerchantOrderID:    "test-go-" + uuid.New().String()[:8],
 		OrderCurrency:      "USD",
 		OrderAmount:        "1.00",
 		OrderDescription:   "Test",
-		NotifyUrl:          "https://example.com/webhook",
-		SuccessRedirectUrl: "https://example.com/success",
-		UserInfo:           &order.UserInfo{UserId: "test-user", UserEmail: "test@example.com", UserTerminal: "WEB"},
+		NotifyURL:          "https://example.com/webhook",
+		SuccessRedirectURL: "https://example.com/success",
+		UserInfo:           &order.UserInfo{UserID: "test-user", UserEmail: "test@example.com", UserTerminal: "WEB"},
 		PaymentInfo:        &order.PaymentInfo{ProductName: "ONE_TIME_PAYMENT"},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("Create order error: %v", err)
 	}
 
 	// Then query
-	resp, err := client.Order().Inquiry(ctx, order.InquiryOrderParams{
-		PaymentRequestId: paymentRequestID,
-	})
+	resp, err := client.Order().Inquiry(ctx, &order.InquiryOrderParams{
+		PaymentRequestID: paymentRequestID,
+	}, nil)
 	if err != nil {
 		t.Fatalf("Inquiry error: paymentRequestID=%s, err=%v", paymentRequestID, err)
 	}
@@ -649,13 +749,12 @@ import (
 	"fmt"
 
 	"github.com/waffo-com/waffo-go/types/merchant"
-	"github.com/waffo-com/waffo-go/types/paymethod"
 )
 
 func GetMerchantConfig(ctx context.Context) (*merchant.InquiryMerchantConfigData, error) {
 	client := GetClient()
 
-	resp, err := client.MerchantConfig().Inquiry(ctx, merchant.InquiryMerchantConfigParams{})
+	resp, err := client.MerchantConfig().Inquiry(ctx, &merchant.InquiryMerchantConfigParams{}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("merchant config error: %w", err)
 	}
@@ -665,14 +764,13 @@ func GetMerchantConfig(ctx context.Context) (*merchant.InquiryMerchantConfigData
 			resp.GetCode(), resp.GetMessage())
 	}
 
-	data := resp.GetData()
-	return &data, nil
+	return resp.GetData(), nil
 }
 
-func GetPaymentMethods(ctx context.Context) (*paymethod.InquiryPayMethodConfigData, error) {
+func GetPaymentMethods(ctx context.Context) (*merchant.InquiryPayMethodConfigData, error) {
 	client := GetClient()
 
-	resp, err := client.PayMethodConfig().Inquiry(ctx, paymethod.InquiryPayMethodConfigParams{})
+	resp, err := client.PayMethodConfig().Inquiry(ctx, &merchant.InquiryPayMethodConfigParams{}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("pay method error: %w", err)
 	}
@@ -682,7 +780,6 @@ func GetPaymentMethods(ctx context.Context) (*paymethod.InquiryPayMethodConfigDa
 			resp.GetCode(), resp.GetMessage())
 	}
 
-	data := resp.GetData()
-	return &data, nil
+	return resp.GetData(), nil
 }
 ```

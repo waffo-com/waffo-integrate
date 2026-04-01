@@ -48,6 +48,17 @@ When a test requires completing payment on the checkout page:
 
 **If Playwright MCP is not available**: Output the checkout URL and test card info, ask developer to complete payment manually, then continue with API polling.
 
+### Non-Card Payment Methods (Sandbox Simulation)
+
+For non-card methods (e-wallets, bank transfers, etc.) in Sandbox:
+
+1. **Navigate**: `browser_navigate` to the checkout URL (created with the specific pay method)
+2. **Snapshot**: `browser_snapshot` to inspect the checkout page
+3. **Look for simulation controls**: Sandbox checkout pages for non-card methods may display a "Simulate Success" / "Mock Payment Success" / "模拟支付成功" button instead of a real payment form
+4. **If simulation button exists**: Click it → wait for result page → verify success + webhook delivery + business logic
+5. **If no simulation button exists**: SKIP this pay method with reason "no Sandbox simulation available"
+6. **APPLEPAY / GOOGLEPAY**: Do NOT attempt — these require a real mobile device. SKIP and inform the integrator to test manually on their phone.
+
 ---
 
 ## §3 Acceptance Criteria
@@ -56,47 +67,47 @@ When a test requires completing payment on the checkout page:
 
 | ID | Criteria | How to verify |
 |----|----------|---------------|
-| AC-1 | **Order creation** | Call project's order creation endpoint (with valid auth) → response contains checkout URL. Verify a local order record was created in the project's database with pending status. |
-| AC-2 | **Payment success** | Use checkout URL from AC-1 → Playwright fills success test card (§1) → wait for terminal status. Verify: (1) order status updated to success in project database, (2) business logic executed (e.g., balance increased, credits added), (3) redirect URL correct on result page. |
-| AC-3 | **Payment failure** | Create new order via project endpoint → Playwright fills failure test card (§1) → wait for terminal status. Verify: (1) order status updated to failed in project database, (2) business logic NOT executed (e.g., balance unchanged), (3) redirect URL correct on result page. |
-| AC-4 | **Order creation failure** | Call project's order creation endpoint with invalid params (e.g., amount below minimum, or missing required fields) → Verify project returns user-friendly error message and local order is marked as failed (not left in pending). |
-| AC-5 | **Webhook idempotency** | After AC-2 completes, replay the same webhook notification to the project's webhook endpoint (use the same payload captured from AC-2 or reconstruct it). Verify business logic does NOT execute a second time (e.g., balance doesn't increase again). |
-| AC-6 | **Multi-pay-method coverage** | Repeat AC-2 for each contracted card brand. Minimum: one credit card + one debit card if both contracted. Non-card methods (APPLEPAY, GOOGLEPAY) marked as SKIP with reason. |
+| order-create | **Order creation** | Call project's order creation endpoint (with valid auth) → response contains checkout URL. Verify a local order record was created in the project's database with pending status. |
+| payment-success | **Payment success** | Use checkout URL from order-create → Playwright fills success test card (§1) → wait for terminal status. Verify: (1) order status updated to success in project database, (2) business logic executed (e.g., balance increased, credits added), (3) redirect URL correct on result page. |
+| payment-failure | **Payment failure** | Create new order via project endpoint → Playwright fills failure test card (§1) → wait for terminal status. Verify: (1) order status updated to failed in project database, (2) business logic NOT executed (e.g., balance unchanged), (3) redirect URL correct on result page. |
+| order-create-error | **Order creation failure** | Call project's order creation endpoint with invalid params (e.g., amount below minimum, or missing required fields) → Verify project returns user-friendly error message and local order is marked as failed (not left in pending). |
+| webhook-idempotency | **Webhook idempotency** | After payment-success completes, replay the same webhook notification to the project's webhook endpoint (use the same payload captured from payment-success or reconstruct it). Verify business logic does NOT execute a second time (e.g., balance doesn't increase again). |
+| pay-method-coverage | **Pay method full coverage** | Test **every contracted pay method**: (1) Card-based methods — run payment-success once per card brand using matching §1 test card. (2) Non-card methods (e-wallets, bank transfers, etc.) — create an order with that pay method, open checkout URL with Playwright, look for a Sandbox "simulate success" button; if found, click it and verify webhook + business logic; if not found, SKIP with reason. (3) APPLEPAY / GOOGLEPAY — SKIP with reason "requires real mobile device"; inform integrator to test manually on phone. |
 
 ### Refund (if project integrates refund)
 
 | ID | Criteria | How to verify |
 |----|----------|---------------|
-| AC-7 | **Refund success** | Call project's refund endpoint on a paid order from AC-2 → refund succeeds. Verify order/refund status updated in project database. |
-| AC-8 | **Refund inquiry** | Call project's refund query endpoint → returns correct refund status matching AC-7 result. |
-| AC-9 | **Refund webhook** | After AC-7, verify refund notification was received by project's webhook endpoint and project updated status accordingly. |
+| refund-success | **Refund success** | Call project's refund endpoint on a paid order from payment-success → refund succeeds. Verify order/refund status updated in project database. |
+| refund-inquiry | **Refund inquiry** | Call project's refund query endpoint → returns correct refund status matching refund-success result. |
+| refund-webhook | **Refund webhook** | After refund-success, verify refund notification was received by project's webhook endpoint and project updated status accordingly. |
 
 ### Subscription — basic (if project integrates subscription)
 
 | ID | Criteria | How to verify |
 |----|----------|---------------|
-| AC-10 | **Subscription creation + activation** | Call project's subscription creation endpoint → Playwright pays → activation webhook arrives → project handles activation (e.g., starts subscription record). |
-| AC-11 | **Subscription inquiry** | Call project's subscription query endpoint → returns correct subscription status (ACTIVE after AC-10). |
-| AC-12 | **Renewal webhook** | Trigger next period billing via Sandbox management page (Playwright clicks "Next period payment success") → period notification arrives → project processes renewal. |
-| AC-13 | **Subscription cancel** | Call project's cancel endpoint → subscription cancelled. Verify status updated in project database. |
+| subscription-create | **Subscription creation + activation** | Call project's subscription creation endpoint → Playwright pays → activation webhook arrives → project handles activation (e.g., starts subscription record, local record created). |
+| subscription-inquiry | **Subscription inquiry** | Call project's subscription query endpoint → returns correct subscription status (ACTIVE after subscription-create). |
+| subscription-renewal | **Renewal webhook** | Trigger next period billing via Sandbox management page (Playwright clicks "Next period payment success") → period notification arrives → project processes renewal. |
+| subscription-cancel | **Subscription cancel** | Call project's cancel endpoint → subscription cancelled. Verify status updated in project database. |
 
 ### Subscription — change (if project integrates subscription change)
 
 | ID | Criteria | How to verify |
 |----|----------|---------------|
-| AC-14 | **Subscription change** | Call project's subscription change endpoint → change succeeds. Verify status updated. |
-| AC-15 | **Change inquiry** | Call project's change query endpoint → returns correct change status. |
+| subscription-change | **Subscription change** | Call project's subscription change endpoint → change succeeds. Verify status updated. |
+| subscription-change-inquiry | **Change inquiry** | Call project's change query endpoint → returns correct change status. |
 
 ### Execution Dependencies
 
 ```
-AC-1 → AC-2 → AC-5 (idempotency uses AC-2's webhook)
-AC-1 → AC-3
-AC-4 (independent)
-AC-2 → AC-6 (repeat with different cards)
-AC-2 → AC-7 → AC-8, AC-9
-AC-10 → AC-11, AC-12, AC-13
-AC-14 → AC-15
+order-create → payment-success → webhook-idempotency
+order-create → payment-failure
+order-create-error (independent)
+payment-success → pay-method-coverage (repeat with ALL contracted card brands)
+payment-success → refund-success → refund-inquiry, refund-webhook
+subscription-create → subscription-inquiry, subscription-renewal, subscription-cancel
+subscription-change → subscription-change-inquiry
 ```
 
 ---
@@ -104,43 +115,180 @@ AC-14 → AC-15
 ## §4 Report Template
 
 ```
-╔═══════════════════════════════════════════════════════════════╗
-║              Integration Verification Report                  ║
-║  Project: {project name}                                      ║
-║  Date: {date}                                                 ║
-║  Features: {Order Payment, Webhook, Refund, Subscription...}  ║
-║  Pay Methods Contracted: {full list}                          ║
-║  Pay Methods Tested: {tested list}                            ║
-╠═══════╦═══════════════════════════════╦════════╦══════════════╣
-║ ID    ║ Criteria                      ║ Result ║ Details      ║
-╠═══════╬═══════════════════════════════╬════════╬══════════════╣
-║ AC-1  ║ Order creation                ║ PASS   ║ checkout URL ║
-║ AC-2  ║ Payment success (CC_VISA)     ║ PASS   ║ balance +100 ║
-║ AC-3  ║ Payment failure (CC_VISA)     ║ PASS   ║ balance unch ║
-║ AC-4  ║ Order creation failure        ║ PASS   ║ error msg ok ║
-║ AC-5  ║ Webhook idempotency           ║ PASS   ║ no double    ║
-║ AC-6  ║ Multi-pay-method              ║ PARTIAL║ see below    ║
-║ ...   ║ ...                           ║ ...    ║ ...          ║
-╠═══════╩═══════════════════════════════╩════════╩══════════════╣
-║ Checklist:                                                    ║
-║   C1 All applicable ACs tested  : PASS                        ║
-║   C2 Pay method coverage         : PARTIAL — APPLEPAY skipped ║
-║   C3 Business logic verified     : PASS                       ║
-║   C4 Redirect URLs verified      : PASS                       ║
-╠═══════════════════════════════════════════════════════════════╣
-║ Verdict: CONDITIONAL                                          ║
-╠═══════════════════════════════════════════════════════════════╣
-║ Pay Method Coverage:                                          ║
-║   CC_VISA      TESTED (AC-2)                                  ║
-║   DC_VISA      TESTED (AC-6)                                  ║
-║   APPLEPAY     SKIP — no Sandbox test card                    ║
-║   GOOGLEPAY    SKIP — no Sandbox test card                    ║
-║ Remediation:                                                  ║
-║   C2 — Non-card methods cannot be automated in Sandbox        ║
-╚═══════════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════════════════╗
+║                    Integration Acceptance Report                        ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║ Overview                                                                ║
+║   Project: {project name}                                               ║
+║   Date: {date}                                                          ║
+║   SDK Version: {version}    Environment: Sandbox                        ║
+║   MID: {merchant ID}                                                    ║
+║   Features: {Order Payment, Webhook, Refund, Subscription...}           ║
+║   Pay Methods Contracted: {full list from merchant config}              ║
+║   Pay Methods Tested: {tested list}                                     ║
+╠═══════════════════════════╦════════╦═════════════════════════════════════╣
+║ Active Test Results       ║ Result ║ Details                             ║
+╠═══════════════════════════╬════════╬═════════════════════════════════════╣
+║ order-create              ║ PASS   ║ checkout URL returned               ║
+║ payment-success (CC_VISA) ║ PASS   ║ balance +100, webhook received      ║
+║ payment-failure (CC_VISA) ║ PASS   ║ balance unchanged                   ║
+║ order-create-error        ║ PASS   ║ error message correct               ║
+║ webhook-idempotency       ║ PASS   ║ no duplicate execution              ║
+║ pay-method: CC_VISA       ║ PASS   ║ payment + webhook verified          ║
+║ pay-method: CC_MASTER     ║ PASS   ║ payment + webhook verified          ║
+║ pay-method: DC_VISA       ║ PASS   ║ payment + webhook verified          ║
+║ pay-method: APPLEPAY      ║ SKIP   ║ requires real mobile device         ║
+║ refund-success            ║ PASS   ║ refund initiated                    ║
+║ refund-inquiry            ║ PASS   ║ status correct                      ║
+║ refund-webhook            ║ PASS   ║ local status updated                ║
+║ subscription-create       ║ PASS   ║ checkout URL + local record         ║
+║ ...                       ║ ...    ║ ...                                 ║
+╠═══════════════════════════╩════════╩═════════════════════════════════════╣
+║ Parameter Check                                                         ║
+║   orderDescription: specific description ✓                              ║
+║   goodsName / goodsUrl or appName: provided ✓                           ║
+║   userEmail: valid format, no "test" ✓                                  ║
+║   userTerminal: matches actual terminal ✓                               ║
+║   Time fields: ISO 8601 UTC+0 ✓                                        ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║ Data Integrity Check                                                    ║
+║   Idempotency key persisted before API call: ✓                          ║
+║   acquiringOrderID stored: ✓                                            ║
+║   refundRequestId returned and persisted: ✓                             ║
+║   Redirect URLs (success + failed + cancel): ✓                          ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║ Risk Items                                                              ║
+║   WaffoUnknownStatusError handling: ✓ retry + no close + inquiry        ║
+║   Webhook duplicate push protection: ✓ idempotency check               ║
+║   Concurrency safety: ✓ row-level lock                                  ║
+║   Amount precision: ✓ decimal library used                              ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║ Passive Verification (Code Review) — 15 items                           ║
+║   Payment 1.3  C0005 channel rejection   : COVERED  file:line          ║
+║   Payment 1.4  A0011 idempotency         : COVERED  uuid per request   ║
+║   Payment 1.5  C0001 system unavailable  : COVERED  file:line          ║
+║   Payment 1.6  E0001 unknown status      : COVERED  file:line          ║
+║   Payment 3.3  webhook sig failure       : COVERED  SDK auto-reject    ║
+║   Payment 4.2  cancel channel rejection  : PARTIAL  no user message    ║
+║   ...                                                                   ║
+║   Subscription 3.5  sub webhook sig fail : COVERED  SDK auto-reject    ║
+║   ...                                                                   ║
+║   Summary: 13 COVERED / 1 PARTIAL / 1 MISSING                          ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║ Pay Method Coverage                                                     ║
+║   CC_VISA      TESTED (payment-success)                                 ║
+║   CC_MASTER    TESTED (pay-method-coverage)                             ║
+║   DC_VISA      TESTED (pay-method-coverage)                             ║
+║   APPLEPAY     SKIP — requires real mobile device                       ║
+║   GOOGLEPAY    SKIP — requires real mobile device                       ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║ Checklist                                                               ║
+║   C1 All applicable tests executed         : PASS                       ║
+║   C2 Pay method coverage (all card brands) : PASS                       ║
+║   C3 Business logic verified               : PASS                       ║
+║   C4 Redirect URLs verified                : PASS                       ║
+║   C5 Passive verification code review      : PARTIAL (1 MISSING)        ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║ Verdict: CONDITIONAL                                                    ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║ Next Actions (Pre-Go-Live)                                              ║
+║   □ If WeChat Pay: provide production domain to Waffo for registration  ║
+║   □ If Google Pay: apply for API access before production               ║
+║   □ If Apple Pay + iframe: Apple Pay cannot be used inside iframe       ║
+║   □ Merchant timeout: ≥ 8s minimum, 15s recommended                    ║
+║   □ DNS cache time: 60s (Waffo multi-gateway disaster recovery)         ║
+║   □ If server in mainland China: latency risk, consider SDWAN/VPN       ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║ Remediation                                                             ║
+║   {list items that need fixing before go-live}                          ║
+╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
 **Verdict rules:**
-- **FULL**: All C1-C4 are PASS → integration fully verified
+- **FULL**: All C1-C5 are PASS → integration fully verified
 - **CONDITIONAL**: Any PARTIAL → report lists what remains
 - **INCOMPLETE**: Any FAIL → must fix before go-live
+
+---
+
+## §5 Official Test Cases (53 Items)
+
+Source: Merchant Integration Test Cases v1.3 + Subscription Test Cases v2.2
+
+**Principle**: All 53 items retained. Active scenarios are tested automatically. Exception scenarios are passively verified (code review + observed during testing).
+
+### Payment Test Cases (29 items)
+
+| Case | Description | Verification | Notes |
+|------|-----------|-------------|-------|
+| 1.1 | Payment success — all pay methods | Active | Run for each contracted pay method |
+| 1.2 | Payment failure — all pay methods | Active | Run for each contracted pay method |
+| 1.3 | Channel rejection C0005 | Passive | Sandbox: amount 90/990. Review error handler. |
+| 1.4 | Idempotency conflict A0011 | Passive | Review ID generation logic. If appears during test → FAIL |
+| 1.5 | System unavailable C0001 | Passive | Sandbox: amount 9.1/91. Review retry + message. |
+| 1.6 | Unknown Status E0001 | Active (Exception) | Sandbox: amount 9.2/92. Verify: retry → no close → inquiry |
+| 2.1 | Query — before payment | Active | Verify intermediate status handling |
+| 2.2 | Query — after payment success | Active | Verify field consistency |
+| 2.3 | Query — after payment failure | Active | Verify field consistency |
+| 3.1 | Payment success webhook | Active | Core |
+| 3.2 | Payment failure webhook | Active | Core |
+| 3.3 | Webhook signature failure | Passive | Strategy: ignore, query via inquiry |
+| 4.1 | Cancel before payment | Active | Business scenario |
+| 4.2 | Cancel — channel rejection | Passive | Review error handler |
+| 4.3 | Cancel after payment success | Active | Integrator must prevent in UI |
+| 4.4 | Cancel — system unavailable | Passive | Review retry + message |
+| 4.5 | Cancel — Unknown | Active (Exception) | Sandbox: amount 9.2/92. Verify: no close → inquiry |
+| 5.1 | Refund success | Active | Core |
+| 5.2 | Refund param validation failure | Passive | Review error handler |
+| 5.3 | Refund rule limitation | Active | Integrator must understand refund limits |
+| 5.4 | Refund idempotency conflict | Passive | Review ID generation, observe during test |
+| 5.5 | Refund — system unavailable | Passive | Review retry + message |
+| 5.6 | Refund — Unknown | Active (Exception) | Sandbox: amount 9.2/92. Verify: no close → inquiry |
+| 6.1 | Refund query — processing | Active | Verify refund status |
+| 6.2 | Refund query — full refund success | Active | Verify refund status |
+| 6.3 | Refund query — partial refund success | Active | Verify refund status |
+| 6.4 | Refund query — refund failed | Active | Verify refund status |
+| 7.1 | Refund success webhook | Active | Core |
+| 7.2 | Refund failure webhook | Active | Core |
+| 7.3 | Refund webhook signature failure | Passive | Strategy: ignore, query via inquiry |
+
+### Subscription Test Cases (24 items)
+
+| Case | Description | Verification | Notes |
+|------|-----------|-------------|-------|
+| 1.1 | Subscription success — all pay methods | Active | Run for each contracted pay method |
+| 1.2 | Subscription failure — all pay methods | Active | Run for each contracted pay method |
+| 1.3 | Next period payment success | Active | Renewal core |
+| 1.4 | Next period payment failure | Active | Renewal failure handling |
+| 1.5 | Channel rejection | Passive | Review error handler |
+| 1.6 | Idempotency conflict | Passive | Review ID generation, observe during test |
+| 1.7 | System unavailable | Passive | Review retry + message |
+| 1.8 | Unknown Status | Active (Exception) | Sandbox: amount 9.2/92. Verify: no close → inquiry |
+| 2.1 | Query — before payment | Active | Verify intermediate status |
+| 2.2 | Query — after payment success | Active | Verify field consistency |
+| 2.3 | Query — after payment failure | Active | Verify field consistency |
+| 3.1 | Subscription ACTIVE webhook | Active | Core |
+| 3.2 | Subscription CLOSE webhook | Active | Core |
+| 3.3 | Channel cancel webhook | Active | Core |
+| 3.4 | Merchant cancel webhook | Active | Core |
+| 3.5 | Subscription webhook signature failure | Passive | Strategy: ignore, query via inquiry |
+| 4.1 | First period payment success notification | Active | Per-period payment result |
+| 4.2 | Renewal payment success notification | Active | Per-period payment result |
+| 4.3 | Renewal payment failure notification | Active | Per-period payment result |
+| 4.4 | Payment notification signature failure | Passive | Strategy: ignore, query via inquiry |
+| 5.1 | Merchant cancel (each pay method) | Active | Core |
+| 5.6 | Cancel — system unavailable | Passive | Review retry + message |
+| 5.7 | Cancel — Unknown | Active (Exception) | Sandbox: amount 9.2/92. Verify: no close → inquiry |
+
+### Summary
+
+| | Total | Active | Active (Exception) | Passive |
+|--|-------|--------|-------------------|---------|
+| Payment | 29 | 18 | 3 (1.6, 4.5, 5.6) | 8 |
+| Subscription | 24 | 15 | 2 (1.8, 5.7) | 7 |
+| **Total** | **53** | **33** | **5** | **15** |
+
+**Verification method definitions:**
+- **Active (33 items)**: Normal scenarios — write test code, execute automatically
+- **Active Exception (5 items)**: Unknown Status (E0001) — write test code using specific Sandbox amounts to trigger. Reason: complex handling (retry → no close → inquiry → wait for webhook), Sandbox can reliably reproduce, mishandling has severe consequences (user paid but no benefit granted)
+- **Passive (15 items)**: Channel rejection / signature failure / idempotency conflict — no test code. Verified through code review confirming exception handling exists. If unexpectedly triggered during testing → that item fails

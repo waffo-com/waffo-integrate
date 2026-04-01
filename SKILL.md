@@ -80,6 +80,43 @@ Operations: `merchantConfig().inquiry()`
 
 Operations: `payMethodConfig().inquiry()`
 
+### Integration Context Questions
+
+After feature selection, ask these questions — their answers affect code generation:
+
+**Ask in order (skip questions that don't apply to selected features):**
+
+1. **User terminal type**: "What type of client will users pay from?"
+   - `WEB` — PC/desktop browser
+   - `APP` — Mobile app or tablet (WebView inside native app)
+   - `WAP` — Mobile browser
+   - `SYSTEM` — Server-to-server (no user-facing UI)
+   
+   Determine by actual user terminal: WebView inside App = `APP`, phone browser = `WAP`, PC browser = `WEB`, server call = `SYSTEM`.
+
+2. **Checkout pay method selection**: "Do users select payment method on YOUR checkout page, or on Waffo's checkout page?"
+   - **Integrator's checkout** → must pass `payMethodType` and/or `payMethodName` in order create
+   - **Waffo's checkout** → do NOT pass `payMethodType`/`payMethodName`, let user choose on Waffo page
+
+3. **Subscription mode** *(only if Subscription selected)*: "When subscription renewal fails, what should happen?"
+   - **Payment-first**: Suspend benefits during retry period. On success, next period starts from success date. On permanent failure, stop retrying.
+   - **Service-first**: Continue providing service during retry period. Keep retrying in subsequent cycles.
+
+4. **Subscription refund** *(only if Subscription selected)*: "Do you need to refund subscription payments?"
+   - Yes → generate refund-related code for subscriptions
+   - No → skip subscription refund code
+
+5. **Pricing currency**: "Where does the pricing currency come from? Do different countries use different currencies?"
+   - Note: When integrating Japan local payment methods, currency must be `JPY` or `USD`. Global card payments have no currency restriction.
+
+6. **iframe checkout** *(if applicable)*: "Will you load Waffo checkout page inside an iframe?"
+   - Yes → additional frontend config needed: `referrer-policy`, `allow="payment"`, responsive width
+   - Note: Apple Pay cannot be used inside iframe
+
+7. **Checkout expiry** *(if applicable)*: "Do you need a custom checkout page expiry time?"
+   - Default is 4 hours. Can be customized via `orderExpiredAt` field (UTC+0 timezone required).
+   - Note: Only `alipay`, `alipayhk`, `wechatpay` channels support custom expiry on the channel side.
+
 ### Smart Defaults
 
 - If developer selects "Order Payment", suggest Refund as well (most payment integrations need it)
@@ -124,9 +161,21 @@ Before writing any files, present the complete integration code for the develope
 1. **SDK initialization** (always)
 2. **Service layer** for each selected feature
 3. **Webhook route** (if selected)
-4. **Test files**
+4. **Test files** — generate at least one test function per selected feature module:
+   - Order Payment selected → `TestCreateOrder`, `TestQueryOrder`, `TestCancelOrder`
+   - Refund selected → `TestRefundOrder`, `TestQueryRefund`
+   - Subscription selected → `TestCreateSubscription`, `TestQuerySubscription`, `TestCancelSubscription`
+   - Merchant Config selected → `TestGetMerchantConfig`
+   - Payment Method selected → `TestGetPaymentMethods`
 
 **IMPORTANT**: Before generating any code, read `references/api-contract.md` to verify required fields, enum values, and field types. This is the source of truth extracted from openapi.json — do not guess field names or assume which fields are optional.
+
+**Exception handling (MANDATORY)**: Generated code MUST cover these four exception handling branches. Reference existing payment provider implementations (Stripe/Creem/PayPal) in the project for error handling patterns:
+
+1. **Channel Rejection / System Unavailable** (C0001/C0005) → Return user-friendly error message, guide user to retry or switch payment method
+2. **Unknown Status** (E0001 / WaffoUnknownStatusError) → Retry with same parameters up to 3 times → if still fails, do NOT close the order → show friendly message suggesting alternative payment method → use inquiry API result or webhook notification as source of truth
+3. **Signature Verification Failed** (in webhook handler) → Do NOT process this notification, keep order/subscription status unchanged → query correct status via inquiry API
+4. **Idempotency Conflict** (A0011) → Ensure each paymentRequestId / refundRequestId / subscriptionRequest is independently generated per request, never reused
 
 Then use the language-specific reference files for code templates:
 - Node.js: Read `references/node.md`
@@ -139,7 +188,8 @@ After the developer approves, write files to their project:
 
 1. **Install SDK dependency** (run the appropriate package manager command)
 2. **Create integration files** in a sensible project structure
-3. **Show next steps** (configure credentials, set up webhook endpoint, etc.)
+3. **Verify build**: Run the project's build command (`go build ./...`, `npm run build`, `mvn compile`) — the generated code **must compile on the first attempt** without manual fixes
+4. **Proceed to Step 7 (MANDATORY)**: After a successful build, you MUST immediately begin Step 7 (Integration Verification) **in the same response**. Output "✅ Build passed. Starting Step 7: Integration Verification..." and proceed without waiting for user input. If prerequisites are missing (credentials, running server, tunnel), list exactly what is needed and ask the developer — but do NOT end your turn or stop working. If you are running low on context, output a clear handoff message: "⚠️ Step 7 requires a new session. Run `集成测试` or `run integration tests` to continue."
 
 ### SDK Installation
 
@@ -147,7 +197,7 @@ Dynamically fetch the latest version before installing:
 
 **Node.js:**
 ```bash
-npm view @anthropic-ai/waffo-node version  # get latest
+npm view @waffo/waffo-node version  # get latest
 npm install @waffo/waffo-node
 ```
 
@@ -161,7 +211,11 @@ go get github.com/waffo-com/waffo-go@latest
 
 ### File Structure
 
-Adapt to the project's existing structure. If none exists, use these defaults:
+**Existing project adaptation (IMPORTANT):** Before using the default structure below, explore the project's existing layout. If the project already has a layered architecture (e.g., `controller/`, `service/`, `model/`, `setting/`, `router/`), place Waffo files into those existing directories following the project's naming conventions. Look for existing payment provider integrations (Stripe, PayPal, Creem, etc.) and mirror their patterns — file naming, route grouping, config variable style, error handling, and middleware usage. The default structures below are **only for new/empty projects**.
+
+**Competitor-first reference (IMPORTANT):** Before generating Waffo code, search the project for existing payment provider integrations (Stripe, Creem, PayPal, etc.) and align: amount calculation, webhook processing flow, order status transitions, refund benefit handling, route organization and naming. Waffo integration MUST reuse existing patterns to reduce the integrator's cognitive load — this also means many business questions can be answered by reading existing code instead of asking.
+
+Default structures (for new projects only):
 
 **Node.js:**
 ```
@@ -218,21 +272,58 @@ internal/waffo/waffo_test.go  # Tests
 
 5. **Webhook response**: The webhook handler returns a signed response. The developer must set `X-SIGNATURE` header and return `responseBody` as-is. Do not modify the response body.
 
-6. **Thread safety**: Recommend creating a single SDK instance and reusing it (singleton pattern).
+6. **Webhook business logic pattern**: The webhook handler must NOT be left as TODO placeholders. For each notification type, implement the three-stage pattern:
+   - **Stage 1 — Idempotency check**: Query the local order/subscription by its ID. If already in terminal status (success/failed/cancelled), skip processing and return success response.
+   - **Stage 2 — Concurrency protection**: Lock the order (mutex, distributed lock, or DB row-level lock with `FOR UPDATE`) before processing to prevent duplicate webhooks from double-executing business logic.
+   - **Stage 3 — Business execution in transaction**: Within a database transaction: update order status → execute business logic (e.g., add balance, activate subscription) → commit. If any step fails, rollback.
 
-7. **Request ID length**: `paymentRequestId`, `refundRequestId`, `subscriptionRequest` all have a **max length of 32 characters**. Do NOT use raw UUIDs (36 chars). Use UUID without dashes: `crypto.randomUUID().replace(/-/g, '')` (Node.js), `UUID.randomUUID().toString().replace("-", "")` (Java), `strings.ReplaceAll(uuid.New().String(), "-", "")` (Go).
+   Ask the developer what business logic to execute on payment success (e.g., "add quota to user", "activate subscription", "fulfill order"). Do NOT generate empty TODOs — generate the actual implementation based on the project's existing patterns (find how other payment providers handle webhook success).
 
-8. **Required fields by merchant**: `userInfo.userTerminal` is required — values: `WEB` (PC/desktop browser), `APP` (mobile app, tablet), `WAP` (mobile browser), `SYSTEM` (server-to-server). Ask the developer what terminal type their users will use, and set the default accordingly. Also include `successRedirectUrl` for payment orders — most merchants require a redirect URL after payment.
+7. **Thread safety**: Recommend creating a single SDK instance and reusing it (singleton pattern).
 
-9. **paymentInfo.productName**: Use `'ONE_TIME_PAYMENT'` for one-time orders and `'SUBSCRIPTION'` for subscriptions — these are the standard product name values recognized by Waffo.
+8. **Request ID length**: `paymentRequestId`, `refundRequestId`, `subscriptionRequest` all have a **max length of 32 characters**. Do NOT use raw UUIDs (36 chars). Use UUID without dashes: `crypto.randomUUID().replace(/-/g, '')` (Node.js), `UUID.randomUUID().toString().replace("-", "")` (Java), `strings.ReplaceAll(uuid.New().String(), "-", "")` (Go).
 
-10. **Subscription-specific field names**: Subscription create uses `currency` and `amount` (NOT `orderCurrency`/`orderAmount` used by order create). Required fields for subscription create: `subscriptionRequest`, `merchantSubscriptionId`, `currency`, `amount`, `notifyUrl`, `successRedirectUrl`, `productInfo` (with `description`, `periodType`, `periodInterval`), `userInfo` (with `userTerminal`), `goodsInfo` (with `goodsId`, `goodsName`, `goodsUrl`), `paymentInfo` (with `productName` and `payMethodType`).
+9. **Required fields by merchant**: `userInfo.userTerminal` is required — values: `WEB` (PC/desktop browser), `APP` (mobile app, tablet), `WAP` (mobile browser), `SYSTEM` (server-to-server). Ask the developer what terminal type their users will use, and set the default accordingly. Also include `successRedirectUrl` for payment orders — most merchants require a redirect URL after payment.
 
-11. **PeriodType values**: Valid values are `'DAILY'`, `'WEEKLY'`, `'MONTHLY'`. There is no `YEARLY`. Period interval is a string (e.g., `'1'`), not a number.
+10. **paymentInfo.productName**: Use `'ONE_TIME_PAYMENT'` for one-time orders and `'SUBSCRIPTION'` for subscriptions — these are the standard product name values recognized by Waffo.
 
-12. **manage() API**: `subscription().manage()` returns a `managementUrl` for the subscription management page. It only works when the subscription is `ACTIVE` (payment completed). Request requires `subscriptionRequest` or `subscriptionId`. The Sandbox management URL includes `mock=true` automatically.
+11. **Subscription-specific field names**: Subscription create uses `currency` and `amount` (NOT `orderCurrency`/`orderAmount` used by order create). Required fields for subscription create: `subscriptionRequest`, `merchantSubscriptionId`, `currency`, `amount`, `notifyUrl`, `successRedirectUrl`, `productInfo` (with `description`, `periodType`, `periodInterval`), `userInfo` (with `userTerminal`), `goodsInfo` (with `goodsId`, `goodsName`, `goodsUrl`), `paymentInfo` (with `productName` and `payMethodType`).
 
-13. **payMethodType is REQUIRED for subscriptions**: `paymentInfo.payMethodType` must be set for subscription create — without it the server returns A0003. Default to `'CREDITCARD,DEBITCARD,APPLEPAY,GOOGLEPAY'` (comma-separated string supporting multiple payment methods). This is different from `payMethodName` which is optional. Do NOT omit `payMethodType` or replace it with `payMethodName`.
+12. **PeriodType values**: Valid values are `'DAILY'`, `'WEEKLY'`, `'MONTHLY'`. There is no `YEARLY`. Period interval is a string (e.g., `'1'`), not a number.
+
+13. **manage() API**: `subscription().manage()` returns a `managementUrl` for the subscription management page. It only works when the subscription is `ACTIVE` (payment completed). Request requires `subscriptionRequest` or `subscriptionId`. The Sandbox management URL includes `mock=true` automatically.
+
+14. **payMethodType is REQUIRED for subscriptions**: `paymentInfo.payMethodType` must be set for subscription create — without it the server returns A0003. Default to `'CREDITCARD,DEBITCARD,APPLEPAY,GOOGLEPAY'` (comma-separated string supporting multiple payment methods). This is different from `payMethodName` which is optional. Do NOT omit `payMethodType` or replace it with `payMethodName`.
+
+15. **Store acquiringOrderID from order create response**: The `order().create()` response contains `acquiringOrderID` — this is Waffo's internal order identifier and is the **only key** in refund webhook notifications (`REFUND_NOTIFICATION`). You MUST store this value alongside the local order record (e.g., in a dedicated column or field). Without it, refund webhooks cannot be matched to local orders because `paymentRequestID` is NOT included in refund notifications.
+
+16. **Create local record for subscription**: After `subscription().create()` succeeds, you MUST insert a local order/subscription record using `subscriptionRequest` as the lookup key. All subscription webhooks (`SUBSCRIPTION_STATUS_NOTIFICATION`, `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION`, `SUBSCRIPTION_CHANGE_NOTIFICATION`) identify orders by `subscriptionRequest`. If no local record exists, every subscription webhook will silently fail. Also store `subscriptionID` from the response for future reference.
+
+17. **Wire SDK client reset to config updates**: If the project stores SDK credentials in a database or config file that can be updated at runtime (e.g., admin settings page), ensure that changing any Waffo credential triggers a reset of the SDK singleton. Otherwise the old credentials remain in memory until server restart. Use a callback, event, or direct call depending on the project's architecture.
+
+18. **Return and persist generated request IDs**: When the integration generates a request ID (e.g., `paymentRequestId`, `refundRequestId`, `subscriptionRequest`) during an API call, that ID MUST be (1) returned to the caller in the HTTP response, and (2) persisted in the local database. These IDs are required for subsequent inquiry/status operations. If they are generated internally but not exposed, the corresponding query endpoints become unusable.
+
+19. **Set all redirect URLs**: Order create and subscription create MUST include all three redirect URLs: `successRedirectUrl`, `failedRedirectUrl`, and `cancelRedirectUrl`. Missing the failed or cancel URL causes the Waffo checkout page to show no return link on failure/cancellation, trapping the user on the payment page.
+
+20. **orderDescription**: Pass a specific, descriptive order description (e.g., "Premium Plan - 1 Month"). This helps identify orders during customer support investigations.
+
+21. **goodsName is required**: `goodsName` must always be provided. Additionally, provide either `goodsUrl` (product detail page URL, NOT an image URL) or `appName` (the app's name as listed on AppStore/Google Play). At least one of the two is recommended.
+
+22. **userEmail format**: Do NOT include the word "test" in `userEmail`. Do NOT share the same email across multiple users. Recommended format for generated emails: `{userId}@example.com`.
+
+23. **Card payment payMethodType**: For card-based payments, recommend setting `payMethodType="CREDITCARD,DEBITCARD"` without passing `payMethodName`. This lets Waffo auto-detect the card brand from the BIN (Bank Identification Number).
+
+24. **No payMethodCountry for global cards**: Do NOT pass `payMethodCountry` for global card payments. This field is only relevant for local payment methods.
+
+25. **Time field format**: All time fields (`orderRequestedAt`, `userCreatedAt`, etc.) must use ISO 8601 UTC+0 format ending with `Z`. Milliseconds must not exceed 3 digits. Example: `2026-04-01T12:00:00.000Z`.
+
+26. **subscriptionManagementUrl**: This URL must be provided for subscription integrations and MUST require authentication. Users should not be able to manage their subscription without being logged in.
+
+27. **Webhook callback port**: Waffo can only deliver webhooks to ports **80** (HTTP) and **443** (HTTPS). Other ports are not accessible. Ensure your webhook endpoint is served on one of these standard ports.
+
+28. **Webhook response format**: The webhook response body must be exactly `{"message":"success"}` with `Content-Type: application/json`. No extra whitespace, no different JSON keys, no HTML. When using the SDK's `HandleWebhook()`, this is handled automatically.
+
+29. **Redirect URL format**: Redirect URLs (`successRedirectUrl`, `failedRedirectUrl`, `cancelRedirectUrl`) support both HTTPS links and deeplinks (e.g., `komoe://payment/result`). Both formats are valid.
 
 ---
 
@@ -249,6 +340,12 @@ Step 7 can be entered two ways:
 1. **After Step 6** — natural continuation after writing integration code
 2. **Direct trigger** — developer says "跑集成测试" on an already-integrated project
 
+### Business Validation References (MANDATORY — read before testing)
+
+Before generating any test, read these reference files:
+- `references/business-validation.md` — code check list (§1), business questions (§2), competitor reference (§3), passive verification checklist (§4), acceptance report template (§5)
+- `references/sandbox-knowledge.md` — Sandbox-specific quirks: credit card refund webhook limitation (K024), subscription renewal simulation (K018), checkout selectors (K026), response format (K023), rate limiting (K027), exception trigger amounts
+
 ### Context Discovery (MANDATORY first step)
 
 Before generating any test, read the project's code to understand:
@@ -258,7 +355,7 @@ Before generating any test, read the project's code to understand:
 3. **Webhook handler**: Understand what business logic runs on payment success/failure (e.g., recharge balance, update order status)
 4. **Pay methods**: Read project config for contracted payment methods
 5. **Credentials**: Check env vars, config files, database options for Sandbox credentials
-6. **Feature scope**: Determine which features are integrated → map to applicable AC items
+6. **Feature scope**: Determine which features are integrated → map to applicable test items
 
 Output a summary before proceeding:
 ```
@@ -269,7 +366,7 @@ Context Discovery:
   Pay methods:       CREDITCARD,DEBITCARD / APPLEPAY / GOOGLEPAY
   Credentials:       Found in database options (Sandbox)
   Features:          Order Create + Webhook (no Cancel/Refund/Subscription)
-  Applicable ACs:    AC-1 ~ AC-6
+  Applicable tests:  order-create, payment-success, payment-failure, order-create-error, webhook-idempotency, pay-method-coverage
 ```
 
 ### Prerequisites
@@ -285,56 +382,58 @@ Read `references/acceptance-criteria.md` for the full criteria definitions. The 
 
 **Core (all projects that integrate Order Payment + Webhook):**
 
-| ID | Criteria | What to verify |
-|----|----------|----------------|
-| AC-1 | Order creation | Project endpoint creates order → returns checkout URL |
-| AC-2 | Payment success | Playwright pays → webhook arrives → project executes business logic (e.g., balance added) |
-| AC-3 | Payment failure | Playwright pays with failure card → webhook arrives → project does NOT execute business logic |
-| AC-4 | Order creation failure | Trigger SDK error via project endpoint → project returns error, marks local order as failed |
-| AC-5 | Webhook idempotency | Send same webhook notification twice → business logic executes only once |
-| AC-6 | Multi-pay-method coverage | Each contracted card brand tested at least once for AC-2 |
+| Test Item | What to verify |
+|-----------|----------------|
+| order-create | Project endpoint creates order → returns checkout URL |
+| payment-success | Playwright pays → webhook arrives → project executes business logic (e.g., balance added) |
+| payment-failure | Playwright pays with failure card → webhook arrives → project does NOT execute business logic |
+| order-create-error | Trigger SDK error via project endpoint → project returns error, marks local order as failed |
+| webhook-idempotency | Send same webhook notification twice → business logic executes only once |
+| pay-method-coverage | **Every contracted card brand** tested with a full payment-success cycle. Use §1 test cards for each. Non-card methods (APPLEPAY, GOOGLEPAY) marked SKIP. |
 
 **Refund (if integrated):**
 
-| ID | Criteria | What to verify |
-|----|----------|----------------|
-| AC-7 | Refund success | Project refund endpoint → refund succeeds → order status updated |
-| AC-8 | Refund inquiry | Project refund query endpoint → returns correct refund status |
-| AC-9 | Refund webhook | Refund notification arrives → project updates order status |
+| Test Item | What to verify |
+|-----------|----------------|
+| refund-success | Project refund endpoint → refund succeeds → order status updated |
+| refund-inquiry | Project refund query endpoint → returns correct refund status |
+| refund-webhook | Refund notification arrives → project updates order status |
 
 **Subscription — basic (if integrated):**
 
-| ID | Criteria | What to verify |
-|----|----------|----------------|
-| AC-10 | Subscription creation | Project endpoint creates subscription → Playwright pays → activation webhook → project handles |
-| AC-11 | Subscription inquiry | Project subscription query endpoint → returns correct status |
-| AC-12 | Renewal webhook | Next period notification arrives → project processes renewal |
-| AC-13 | Subscription cancel | Project cancel endpoint → subscription cancelled → status updated |
+| Test Item | What to verify |
+|-----------|----------------|
+| subscription-create | Project endpoint creates subscription → Playwright pays → activation webhook → project handles (local record must exist) |
+| subscription-inquiry | Project subscription query endpoint → returns correct status |
+| subscription-renewal | Next period notification arrives → project processes renewal |
+| subscription-cancel | Project cancel endpoint → subscription cancelled → status updated |
 
 **Subscription — change (if integrated):**
 
-| ID | Criteria | What to verify |
-|----|----------|----------------|
-| AC-14 | Subscription change | Project change endpoint → change succeeds |
-| AC-15 | Change inquiry | Project change query endpoint → returns correct change status |
+| Test Item | What to verify |
+|-----------|----------------|
+| subscription-change | Project change endpoint → change succeeds |
+| subscription-change-inquiry | Project change query endpoint → returns correct change status |
 
 ### Test Execution
 
-For each applicable AC item:
+For each applicable test item:
 
-1. **Announce**: "Testing AC-{N}: {description}"
+1. **Announce**: "Testing {test-item}: {description}"
 2. **Generate test approach** based on discovered project code (endpoint, auth, params)
 3. **Execute** through the project's HTTP endpoint (NOT directly via SDK)
 4. **Verify** the expected project behavior (check database state, API response, webhook processing)
 5. **Record** result: PASS / FAIL with details
 
-**Execution order matters** — some ACs depend on earlier results:
+**Execution order matters** — some tests depend on earlier results:
 ```
-AC-1 (create order) → AC-2 (pay success) → AC-5 (webhook idempotency)
-AC-1 → AC-3 (pay failure)
-AC-1 → AC-4 (create failure)
-AC-2 → AC-7 (refund, uses paid order)
-AC-6 repeats AC-2 for each card brand
+order-create → payment-success → webhook-idempotency
+order-create → payment-failure
+order-create-error (independent)
+payment-success → pay-method-coverage (repeat with ALL contracted card brands)
+payment-success → refund-success → refund-inquiry, refund-webhook
+subscription-create → subscription-inquiry, subscription-renewal, subscription-cancel
+subscription-change → subscription-change-inquiry
 ```
 
 ### Playwright Checkout Protocol
@@ -348,14 +447,14 @@ When a test requires completing payment on the checkout page, follow `references
 
 ### Pay Method Discovery
 
-Before AC-6, enumerate all contracted pay methods from project config:
-- Card-based methods (CREDITCARD, DEBITCARD) → map to test cards in `references/acceptance-criteria.md` §1
-- Non-card methods (APPLEPAY, GOOGLEPAY) → mark SKIP with reason
-- Execute AC-2 once per testable card brand (minimum: CC_VISA + DC_VISA if both contracted)
+Before pay-method-coverage, enumerate **all** contracted pay methods from project config:
+- **Card-based methods** (CREDITCARD, DEBITCARD) → map to test cards in `references/acceptance-criteria.md` §1. Execute a full payment-success cycle **once per testable card brand** — ALL of them, not just a minimum.
+- **Non-card methods** (e-wallets, bank transfers, etc.) → create an order specifying that pay method, get the checkout URL, then open it with Playwright and check if the Sandbox checkout page provides a "simulate success" / "mock payment" button. If yes → click it to complete the test. If no simulation is available → SKIP with reason.
+- **APPLEPAY / GOOGLEPAY** → SKIP. These require a real mobile device with Apple Pay / Google Pay configured. Inform the integrator: "APPLEPAY and GOOGLEPAY must be tested manually on a real device — create an order, open the checkout URL on your phone, and complete payment using the device's native payment flow."
 
 ### Business Logic Verification
 
-For AC-2, AC-3, AC-5: after the webhook is processed, verify the project's business logic by checking actual state:
+For payment-success, payment-failure, webhook-idempotency: after the webhook is processed, verify the project's business logic by checking actual state:
 
 - **Database**: Query the project's database for order status, user balance, etc.
 - **API**: Call the project's query endpoints to verify state changes
@@ -365,12 +464,12 @@ The specific checks depend on what Context Discovery found in the webhook handle
 
 ### Post-Execution Checklist
 
-After all AC items are tested, evaluate:
+After all test items are executed, evaluate:
 
 | # | Check | Evaluate |
 |---|-------|----------|
-| C1 | All applicable ACs tested | Were any AC items skipped that should have been tested? |
-| C2 | Pay method coverage | All contracted card brands tested? Non-testable methods documented? |
+| C1 | All applicable tests executed | Were any test items skipped that should have been tested? |
+| C2 | Pay method coverage | **All** contracted card brands tested? Non-testable methods documented? |
 | C3 | Business logic verified | Was the project's actual behavior checked (not just API response)? |
 | C4 | Redirect URLs verified | Were success/failure redirect URLs asserted from checkout result page? |
 
@@ -379,10 +478,31 @@ After all AC items are tested, evaluate:
 - Any PARTIAL → **CONDITIONAL** (list remediation steps)
 - Any FAIL → **INCOMPLETE** (list what failed and why)
 
+### Code Review — Passive Verification (MANDATORY after active tests)
+
+After all active tests complete, perform a code review against the passive verification checklist in `references/business-validation.md` §4. This covers 15 exception handling scenarios (8 payment + 7 subscription) that are verified by reading code, not by running tests.
+
+For each passive verification item:
+
+1. **Read** the relevant code section (error handler, webhook signature check, request ID generation, etc.)
+2. **Check** if the exception handling branch exists and implements the correct strategy
+3. **Record** result: `COVERED` / `MISSING` / `PARTIAL` with the code file and line reference
+
+Example:
+```
+Passive Verification (Code Review):
+  Payment 1.3 (C0005 channel rejection)  : COVERED  — service/waffo_payment.go:45
+  Payment 1.4 (A0011 idempotency)        : COVERED  — paymentRequestId uses uuid per request
+  Payment 3.3 (webhook signature failure) : COVERED  — SDK HandleWebhook auto-rejects
+  Subscription 1.8 (Unknown Status)       : MISSING  — no WaffoUnknownStatusError handler
+```
+
+Include the full Code Review results in the verification report under "Passive Verification" section.
+
 ### Verification Report
 
-Generate report per `references/acceptance-criteria.md` §3 template. Include:
-- AC item results (PASS/FAIL/SKIP per item)
+Generate report per `references/acceptance-criteria.md` §4 template. Include:
+- Test item results (PASS/FAIL/SKIP per item, using descriptive names)
 - Checklist results (C1-C4)
 - Overall verdict (FULL / CONDITIONAL / INCOMPLETE)
 - Failed items with details

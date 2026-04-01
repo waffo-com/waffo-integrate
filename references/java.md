@@ -116,8 +116,10 @@ public class WaffoFactory {
 package com.example.service;
 
 import com.waffo.Waffo;
-import com.waffo.types.api.ApiResponse;
+import com.waffo.types.ApiResponse;
+import com.waffo.types.iso.CurrencyCode;
 import com.waffo.types.order.*;
+import com.waffo.types.payment.ProductName;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
@@ -137,7 +139,7 @@ public class PaymentService {
     }
 
     public CreateOrderData createPayment(String merchantOrderId, String amount,
-                                          String currency, String description,
+                                          CurrencyCode currency, String description,
                                           String notifyUrl, String successRedirectUrl,
                                           String userId, String userEmail) {
         CreateOrderParams params = CreateOrderParams.builder()
@@ -151,10 +153,10 @@ public class PaymentService {
                 .userInfo(UserInfo.builder()
                         .userId(userId)
                         .userEmail(userEmail)
-                        .userTerminal("WEB")
+                        .userTerminal(UserTerminalType.WEB)
                         .build())
                 .paymentInfo(PaymentInfo.builder()
-                        .productName("ONE_TIME_PAYMENT")
+                        .productName(ProductName.ONE_TIME_PAYMENT)
                         .build())
                 .build();
 
@@ -209,7 +211,7 @@ public class PaymentService {
 package com.example.service;
 
 import com.waffo.Waffo;
-import com.waffo.types.api.ApiResponse;
+import com.waffo.types.ApiResponse;
 import com.waffo.types.order.RefundOrderParams;
 import com.waffo.types.order.RefundOrderData;
 import com.waffo.types.refund.InquiryRefundParams;
@@ -227,11 +229,11 @@ public class RefundService {
         this.waffo = waffo;
     }
 
-    public RefundOrderData refundOrder(String origPaymentRequestId,
+    public RefundOrderData refundOrder(String acquiringOrderId,
                                         String refundAmount, String refundReason) {
         RefundOrderParams params = RefundOrderParams.builder()
                 .refundRequestId(UUID.randomUUID().toString().replace("-", ""))
-                .origPaymentRequestId(origPaymentRequestId)
+                .acquiringOrderId(acquiringOrderId)
                 .refundAmount(refundAmount)
                 .refundReason(refundReason)
                 .build();
@@ -272,7 +274,9 @@ public class RefundService {
 package com.example.service;
 
 import com.waffo.Waffo;
-import com.waffo.types.api.ApiResponse;
+import com.waffo.types.ApiResponse;
+import com.waffo.types.iso.CurrencyCode;
+import com.waffo.types.payment.SubscriptionProductName;
 import com.waffo.types.subscription.*;
 import org.springframework.stereotype.Service;
 
@@ -288,9 +292,12 @@ public class SubscriptionService {
     }
 
     public CreateSubscriptionData createSubscription(String merchantSubscriptionId,
-                                                      String amount, String currency,
+                                                      String amount, CurrencyCode currency,
                                                       String description, String notifyUrl,
                                                       String successRedirectUrl,
+                                                      String failedRedirectUrl,
+                                                      String cancelRedirectUrl,
+                                                      String subscriptionManagementUrl,
                                                       String userId, String userEmail,
                                                       String productId, String productName,
                                                       String goodsId, String goodsName,
@@ -298,11 +305,13 @@ public class SubscriptionService {
         CreateSubscriptionParams params = CreateSubscriptionParams.builder()
                 .subscriptionRequest(UUID.randomUUID().toString().replace("-", ""))
                 .merchantSubscriptionId(merchantSubscriptionId)
-                .currency(CurrencyCode.USD)
+                .currency(currency)
                 .amount(amount)
-                .orderDescription(description)
                 .notifyUrl(notifyUrl)
                 .successRedirectUrl(successRedirectUrl)
+                .failedRedirectUrl(failedRedirectUrl)
+                .cancelRedirectUrl(cancelRedirectUrl)
+                .subscriptionManagementUrl(subscriptionManagementUrl)
                 .productInfo(ProductInfo.builder()
                         .productId(productId)
                         .productName(productName)
@@ -310,18 +319,18 @@ public class SubscriptionService {
                         .periodType(PeriodType.MONTHLY)
                         .periodInterval("1")
                         .build())
-                .goodsInfo(GoodsInfo.builder()
+                .goodsInfo(SubscriptionGoodsInfo.builder()
                         .goodsId(goodsId)
                         .goodsName(goodsName)
                         .goodsUrl(goodsUrl)
                         .build())
-                .userInfo(UserInfo.builder()
+                .userInfo(SubscriptionUserInfo.builder()
                         .userId(userId)
                         .userEmail(userEmail)
-                        .userTerminal("WEB")  // WEB for PC, APP for mobile/tablet
+                        .userTerminal(SubscriptionUserTerminalType.WEB)  // WEB for PC, APP for mobile/tablet
                         .build())
-                .paymentInfo(PaymentInfo.builder()
-                        .productName("SUBSCRIPTION")
+                .paymentInfo(SubscriptionPaymentInfo.builder()
+                        .productName(SubscriptionProductName.SUBSCRIPTION)
                         .payMethodType("CREDITCARD,DEBITCARD,APPLEPAY,GOOGLEPAY")
                         .build())
                 .build();
@@ -420,32 +429,52 @@ public class WaffoWebhookController {
 
         WebhookHandler handler = waffo.webhook()
                 .onPayment(notification -> {
+                    // Three-stage pattern: idempotency → lock → transaction
+                    // Stage 1: Find local order by paymentRequestId, skip if already terminal
+                    // Stage 2: Lock the order to prevent duplicate processing
+                    // Stage 3: In a DB transaction — update status + execute business logic
+                    //
+                    // Key fields: result.getPaymentRequestId(), result.getOrderStatus(), result.getAcquiringOrderId()
+                    // PAY_SUCCESS → execute business logic (e.g., add balance/quota)
+                    // ORDER_CLOSE → mark order as expired/failed
                     var result = notification.getResult();
-                    System.out.println("Payment " + result.getOrderStatus() +
-                            ": orderId=" + result.getAcquiringOrderId());
-                    // TODO: Update your order status in database
+                    System.out.printf("Payment: paymentRequestId=%s, orderStatus=%s, acquiringOrderId=%s%n",
+                            result.getPaymentRequestId(), result.getOrderStatus(), result.getAcquiringOrderId());
                 })
                 .onRefund(notification -> {
+                    // Three-stage pattern: idempotency → lock → transaction
+                    // IMPORTANT: Refund notification identifies orders by acquiringOrderId (NOT paymentRequestId).
+                    // You must have stored acquiringOrderId from the order create response to look up the local order.
+                    // Key fields: result.getAcquiringOrderId(), result.getRefundStatus(), result.getRefundRequestId()
+                    // ORDER_FULLY_REFUNDED → mark order as refunded
+                    // ORDER_PARTIALLY_REFUNDED → update partial refund state
                     var result = notification.getResult();
-                    System.out.println("Refund " + result.getRefundStatus() +
-                            ": refundId=" + result.getAcquiringRefundOrderId());
-                    // TODO: Update your refund status in database
+                    System.out.printf("Refund: acquiringOrderId=%s, refundStatus=%s, refundRequestId=%s%n",
+                            result.getAcquiringOrderId(), result.getRefundStatus(), result.getRefundRequestId());
                 })
                 .onSubscriptionStatus(notification -> {
+                    // Three-stage pattern: idempotency → lock → transaction
+                    // Look up local record by subscriptionRequest (must have been created during subscription create)
+                    // Key fields: result.getSubscriptionRequest(), result.getSubscriptionStatus(), result.getSubscriptionId()
+                    // ACTIVE → activate subscription / grant access
+                    // MERCHANT_CANCELLED/USER_CANCELLED/EXPIRED/CLOSE → revoke access
                     var result = notification.getResult();
-                    System.out.println("Subscription " + result.getSubscriptionStatus() +
-                            ": subId=" + result.getSubscriptionId());
-                    // TODO: Update your subscription status in database
+                    System.out.printf("Subscription status: subscriptionRequest=%s, status=%s, subscriptionId=%s%n",
+                            result.getSubscriptionRequest(), result.getSubscriptionStatus(), result.getSubscriptionId());
                 })
                 .onSubscriptionPeriodChanged(notification -> {
+                    // Look up local record by subscriptionRequest
+                    // Record the renewal and extend user access for the next billing period
                     var result = notification.getResult();
-                    System.out.println("Period changed: subId=" + result.getSubscriptionId());
-                    // TODO: Record billing period result
+                    System.out.printf("Subscription period changed: subscriptionRequest=%s, subscriptionId=%s%n",
+                            result.getSubscriptionRequest(), result.getSubscriptionId());
                 })
                 .onSubscriptionChange(notification -> {
+                    // Handle upgrade/downgrade result
+                    // Key fields: result.getSubscriptionChangeStatus(), result.getOriginSubscriptionRequest(), result.getSubscriptionRequest()
                     var result = notification.getResult();
-                    System.out.println("Subscription change: " + result.getSubscriptionChangeStatus());
-                    // TODO: Handle subscription upgrade/downgrade result
+                    System.out.printf("Subscription change: changeStatus=%s, subscriptionId=%s%n",
+                            result.getSubscriptionChangeStatus(), result.getSubscriptionId());
                 });
 
         WebhookResult webhookResult = handler.handleWebhook(body, signature);
@@ -466,10 +495,12 @@ public class WaffoWebhookController {
 package com.example;
 
 import com.waffo.Waffo;
-import com.waffo.types.api.ApiResponse;
+import com.waffo.types.ApiResponse;
 import com.waffo.types.config.Environment;
 import com.waffo.types.config.WaffoConfig;
+import com.waffo.types.iso.CurrencyCode;
 import com.waffo.types.order.*;
+import com.waffo.types.payment.ProductName;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -506,7 +537,7 @@ class WaffoIntegrationTest {
         CreateOrderParams params = CreateOrderParams.builder()
                 .paymentRequestId(paymentRequestId)
                 .merchantOrderId("test-" + System.currentTimeMillis())
-                .orderCurrency("USD")
+                .orderCurrency(CurrencyCode.USD)
                 .orderAmount("1.00")
                 .orderDescription("Integration test order")
                 .notifyUrl("https://example.com/webhook")
@@ -514,10 +545,10 @@ class WaffoIntegrationTest {
                 .userInfo(UserInfo.builder()
                         .userId("test-user")
                         .userEmail("test@example.com")
-                        .userTerminal("WEB")
+                        .userTerminal(UserTerminalType.WEB)
                         .build())
                 .paymentInfo(PaymentInfo.builder()
-                        .productName("ONE_TIME_PAYMENT")
+                        .productName(ProductName.ONE_TIME_PAYMENT)
                         .build())
                 .build();
 
@@ -541,13 +572,13 @@ class WaffoIntegrationTest {
         waffo.order().create(CreateOrderParams.builder()
                 .paymentRequestId(paymentRequestId)
                 .merchantOrderId("test-" + System.currentTimeMillis())
-                .orderCurrency("USD")
+                .orderCurrency(CurrencyCode.USD)
                 .orderAmount("1.00")
                 .orderDescription("Test")
                 .notifyUrl("https://example.com/webhook")
                 .successRedirectUrl("https://example.com/success")
-                .userInfo(UserInfo.builder().userId("test-user").userEmail("test@example.com").userTerminal("WEB").build())
-                .paymentInfo(PaymentInfo.builder().productName("ONE_TIME_PAYMENT").build())
+                .userInfo(UserInfo.builder().userId("test-user").userEmail("test@example.com").userTerminal(UserTerminalType.WEB).build())
+                .paymentInfo(PaymentInfo.builder().productName(ProductName.ONE_TIME_PAYMENT).build())
                 .build());
 
         // Then query
@@ -572,11 +603,11 @@ class WaffoIntegrationTest {
 package com.example.service;
 
 import com.waffo.Waffo;
-import com.waffo.types.api.ApiResponse;
+import com.waffo.types.ApiResponse;
 import com.waffo.types.merchant.InquiryMerchantConfigParams;
 import com.waffo.types.merchant.InquiryMerchantConfigData;
-import com.waffo.types.paymethod.InquiryPayMethodConfigParams;
-import com.waffo.types.paymethod.InquiryPayMethodConfigData;
+import com.waffo.types.merchant.InquiryPayMethodConfigParams;
+import com.waffo.types.merchant.InquiryPayMethodConfigData;
 import org.springframework.stereotype.Service;
 
 @Service
