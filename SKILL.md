@@ -532,6 +532,18 @@ Before generating any test, read the project's code to understand:
 5. **Credentials**: Check env vars, config files, database options for Sandbox credentials
 6. **Feature scope**: Determine which features are integrated → map to applicable test items
 7. **payMethodType cross-check** (K029): Read project code to find what `payMethodType` / `payMethodName` values are passed in order/subscription create calls. Cross-compare with step 4's contracted list to produce the **checkout-available** methods. Only methods that are both contracted AND passed in `payMethodType` will appear on the checkout page. Flag mismatches in the summary.
+8. **Go-Live Questionnaire** — ask the developer these questions (answers feed into the report's Go-Live Readiness section):
+
+   | # | Question | Risk if wrong |
+   |---|----------|---------------|
+   | Q1 | "HTTP client timeout 设了多少？（调用 Waffo API 的超时时间）" | < 8s → 多网关容灾可能超时，建议 >= 8s（最低），15s（推荐） |
+   | Q2 | "DNS cache TTL 是多少？" | > 60s → Waffo 多网关灾备切换时 DNS 不生效 |
+   | Q3 | "服务器部署在哪个地区？" | 大陆 → 跨境延迟风险，建议 SDWAN/VPN/专线 |
+   | Q4 | "有集成 WeChat Pay 吗？" | 有 → 上线前需提供生产域名给 Waffo 做渠道注册 |
+   | Q5 | "有集成 Google Pay 吗？" | 有 → 上线前需申请 Google Pay API access |
+   | Q6 | "有集成 Apple Pay 吗？checkout 页面是否在 iframe 里？" | Apple Pay + iframe → BLOCK，Apple Pay 不支持 iframe 内调用 |
+
+   Record answers for the report. If developer doesn't know (e.g., timeout), try to find the value in project code (HTTP client config, DNS resolver config).
 
 Output a summary before proceeding:
 ```
@@ -547,6 +559,7 @@ Context Discovery:
   Credentials:       Found in database options (Sandbox)
   Features:          Order Create + Webhook (no Cancel/Refund/Subscription)
   Applicable tests:  order-create, payment-success, payment-failure, order-create-error, webhook-idempotency, pay-method-coverage
+  Go-Live:           Q1=15s ✓, Q2=60s ✓, Q3=Singapore ✓, Q4=N/A, Q5=N/A, Q6=N/A
 ```
 
 ### Prerequisites
@@ -704,7 +717,7 @@ After all test items are executed, evaluate:
 | # | Check | Evaluate |
 |---|-------|----------|
 | C1 | All applicable tests executed | Were any test items skipped that should have been tested? |
-| C2 | Pay method coverage | **Minimum test set** all tested? Skipped methods documented with reason? APPLEPAY/GOOGLEPAY marked MANUAL? |
+| C2 | Pay method coverage | Cross-check against Context Discovery's `payMethodConfig().inquiry()` result. List **every** contracted method with final status: TESTED / SKIPPED (+ reason) / MANUAL. Flag any method that is contracted + checkout-available but has no test result and no skip reason. |
 | C3 | Business logic verified | Was the project's actual behavior checked (not just API response)? |
 | C4 | Redirect URLs verified | Were success/failure redirect URLs asserted from checkout result page? |
 | C5 | Webhook Content-Type | Webhook response sets `Content-Type: application/json`? SDK only generates responseBody — the web framework default is usually `text/plain`. Check the actual response header during active tests (e.g., inspect webhook call logs or curl the endpoint). If wrong → `FIXABLE_CODE`, apply Loop Mode fix. |
@@ -742,8 +755,10 @@ Include the full Code Review results in the verification report under "Passive V
 
 Generate report per `references/acceptance-criteria.md` §4 template. Include:
 - Test item results (PASS/FAIL/SKIP per item, using descriptive names)
-- Fixes applied during testing (if Loop Mode was triggered)
-- Checklist results (C1-C4)
+- Pay method coverage: list every contracted method with final status (TESTED/SKIPPED/MANUAL), cross-checked against `payMethodConfig().inquiry()` result from Context Discovery
+- Fixes applied during testing (if Loop Mode was triggered, including passive verification fixes)
+- Checklist results (C1-C5)
+- Go-Live Readiness: only items relevant to this project based on Q1-Q6 answers from Context Discovery
 - Overall verdict (FULL / CONDITIONAL / INCOMPLETE)
 - Failed items with details
 - Skipped items with reasons

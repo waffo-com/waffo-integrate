@@ -328,21 +328,25 @@ Output the report in Markdown format:
 | # | Check | Result |
 |---|-------|--------|
 | C1 | All applicable tests executed | PASS |
-| C2 | Pay method coverage (minimum test set) | PASS |
+| C2 | Pay method coverage (cross-checked against API) | PASS |
 | C3 | Business logic verified | PASS |
 | C4 | Redirect URLs verified | PASS |
 | C5 | Passive verification code review | PARTIAL (1 MISSING) |
 
 ## Verdict: **CONDITIONAL**
 
-## Next Actions (Pre-Go-Live)
+## Go-Live Readiness (from Context Discovery Q1-Q6)
 
-- [ ] If WeChat Pay: provide production domain to Waffo for registration
-- [ ] If Google Pay: apply for API access before production
-- [ ] If Apple Pay + iframe: Apple Pay cannot be used inside iframe
-- [ ] Merchant timeout: >= 8s minimum, 15s recommended
-- [ ] DNS cache time: 60s (Waffo multi-gateway disaster recovery)
-- [ ] If server in mainland China: latency risk, consider SDWAN/VPN
+> Only items relevant to this project are listed. N/A items are omitted.
+
+| Item | Status | Detail |
+|------|--------|--------|
+| HTTP timeout (Q1) | ⚠ WARNING | Current: 3s → recommend >= 8s (minimum), 15s (recommended) |
+| DNS cache TTL (Q2) | ✓ OK | 60s |
+| Server region (Q3) | ✓ OK | Singapore |
+| WeChat Pay domain (Q4) | N/A | Not integrated |
+| Google Pay API access (Q5) | N/A | Not integrated |
+| Apple Pay + iframe (Q6) | N/A | Not integrated |
 
 ## Fixes Applied During Testing
 
