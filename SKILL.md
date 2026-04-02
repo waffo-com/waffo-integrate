@@ -107,10 +107,6 @@ After feature selection, ask these questions — their answers affect code gener
 1. **User terminal type**: "What type of client will users pay from?"
    - `WEB` — PC/desktop browser
    - `APP` — Mobile app or tablet (WebView inside native app)
-   - `WAP` — Mobile browser
-   - `SYSTEM` — Server-to-server (no user-facing UI)
-   
-   Determine by actual user terminal: WebView inside App = `APP`, phone browser = `WAP`, PC browser = `WEB`, server call = `SYSTEM`.
 
 2. **Checkout pay method selection**: "Do users select payment method on YOUR checkout page, or on Waffo's checkout page?"
    - **Integrator's checkout** → must pass `payMethodType` and/or `payMethodName` in order create
@@ -324,7 +320,7 @@ internal/waffo/waffo_test.go  # Tests
 
 8. **Request ID length**: `paymentRequestId`, `refundRequestId`, `subscriptionRequest` all have a **max length of 32 characters**. Do NOT use raw UUIDs (36 chars). Use UUID without dashes: `crypto.randomUUID().replace(/-/g, '')` (Node.js), `UUID.randomUUID().toString().replace("-", "")` (Java), `strings.ReplaceAll(uuid.New().String(), "-", "")` (Go).
 
-9. **Required fields by merchant**: `userInfo.userTerminal` is required — values: `WEB` (PC/desktop browser), `APP` (mobile app, tablet), `WAP` (mobile browser), `SYSTEM` (server-to-server). Ask the developer what terminal type their users will use, and set the default accordingly. Also include `successRedirectUrl` for payment orders — most merchants require a redirect URL after payment.
+9. **Required fields by merchant**: `userInfo.userTerminal` is required — values: `WEB` (PC/desktop browser), `APP` (mobile app, tablet). Ask the developer what terminal type their users will use, and set the default accordingly. Also include `successRedirectUrl` for payment orders — most merchants require a redirect URL after payment.
 
 10. **paymentInfo.productName**: Use `'ONE_TIME_PAYMENT'` for one-time orders and `'SUBSCRIPTION'` for subscriptions — these are the standard product name values recognized by Waffo.
 
