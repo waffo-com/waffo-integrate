@@ -429,6 +429,18 @@ public class WaffoWebhookController {
 
         WebhookHandler handler = waffo.webhook()
                 .onPayment(notification -> {
+                    var result = notification.getResult();
+
+                    // NOTE: If Subscription is also integrated, add this filter to skip subscription payments:
+                    // if (result.getPaymentInfo() != null) {
+                    //     String productName = result.getPaymentInfo().getProductName();
+                    //     if ("SUBSCRIPTION".equals(productName) || "MINI_PROGRAM_SUBSCRIPTION".equals(productName)) {
+                    //         // Subscription payments handled by onSubscriptionStatus / onSubscriptionPeriodChanged
+                    //         // If you need to handle failed orders during subscription billing, add logic here
+                    //         return;
+                    //     }
+                    // }
+
                     // Three-stage pattern: idempotency → lock → transaction
                     // Stage 1: Find local order by paymentRequestId, skip if already terminal
                     // Stage 2: Lock the order to prevent duplicate processing
@@ -437,7 +449,6 @@ public class WaffoWebhookController {
                     // Key fields: result.getPaymentRequestId(), result.getOrderStatus(), result.getAcquiringOrderId()
                     // PAY_SUCCESS → execute business logic (e.g., add balance/quota)
                     // ORDER_CLOSE → mark order as expired/failed
-                    var result = notification.getResult();
                     System.out.printf("Payment: paymentRequestId=%s, orderStatus=%s, acquiringOrderId=%s%n",
                             result.getPaymentRequestId(), result.getOrderStatus(), result.getAcquiringOrderId());
                 })

@@ -63,22 +63,40 @@ Operations: `order().refund()`, `refund().inquiry()`
 
 Operations: `subscription().create()`, `subscription().inquiry()`, `subscription().cancel()`, `subscription().manage()`, `subscription().change()`, `subscription().changeInquiry()`
 
-**4. Webhook Notifications**
-> "Do you need to receive real-time notifications from Waffo? (payment results, refund results, subscription status changes). This requires a publicly accessible endpoint on your server."
-
-Events: `PAYMENT_NOTIFICATION`, `REFUND_NOTIFICATION`, `SUBSCRIPTION_STATUS_NOTIFICATION`, `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION`, `SUBSCRIPTION_CHANGE_NOTIFICATION`
-
-Only register handlers for events relevant to selected features. For example, if the developer only chose Order Payment + Refund, only register `onPayment` and `onRefund`. If the developer also chose Subscription, defer subscription event selection to Step 4.5.
-
-**5. Merchant Config Query** (optional, less common)
+**4. Merchant Config Query** (optional, less common)
 > "Do you need to query your merchant configuration (supported currencies, merchant status)?"
 
 Operations: `merchantConfig().inquiry()`
 
-**6. Payment Method Query** (optional, less common)
+**5. Payment Method Query** (optional, less common)
 > "Do you need to query available payment methods for your merchant?"
 
 Operations: `payMethodConfig().inquiry()`
+
+### Webhook Auto-Derive (NOT a separate question)
+
+Webhook is mandatory for any payment integration — do NOT ask the developer whether to integrate webhooks. Automatically register handlers based on selected features:
+
+| Selected Feature | Auto-register handlers |
+|-----------------|----------------------|
+| Order Payment | `onPayment` |
+| Refund | `onRefund` |
+| Subscription | `onSubscriptionStatus` + `onSubscriptionPeriodChanged` |
+| Subscription + Change | above + `onSubscriptionChange` |
+
+**CRITICAL — onPayment must filter out subscription payments:** When both Order Payment and Subscription are integrated, subscription billing also triggers `PAYMENT_NOTIFICATION`. The `onPayment` handler MUST check `paymentInfo.productName` and skip subscription types:
+
+```
+productName := notification.Result.PaymentInfo.ProductName
+if productName == "SUBSCRIPTION" || productName == "MINI_PROGRAM_SUBSCRIPTION" {
+    // Subscription payments are handled by onSubscriptionStatus / onSubscriptionPeriodChanged
+    // If you need to handle failed orders during subscription billing, add logic here
+    return
+}
+// Process one-time payment (ONE_TIME_PAYMENT / DIRECT_PAYMENT) below
+```
+
+**Webhook payload structure**: Each webhook notification's payload matches the corresponding inquiry API response structure. For example, `PaymentNotification` has the same fields as Order Inquiry response, `SubscriptionStatusNotification` matches Subscription Inquiry response.
 
 ### Integration Context Questions
 
@@ -120,12 +138,12 @@ After feature selection, ask these questions — their answers affect code gener
 ### Smart Defaults
 
 - If developer selects "Order Payment", suggest Refund as well (most payment integrations need it)
-- If developer selects "Subscription", suggest Webhook (subscription lifecycle depends on it)
+- Webhook is always included automatically — no need to suggest or ask
 - Always include SDK initialization (WaffoConfig + Waffo instance) regardless of selection
 
-## Step 4: Framework Selection (Webhook only)
+## Step 4: Framework Selection
 
-If the developer selected Webhook, ask about their web framework.
+Since webhook is always included, ask about the web framework whenever Order Payment or Subscription is selected.
 
 **Recommend mainstream frameworks by language:**
 
@@ -139,9 +157,9 @@ Ask: "What web framework are you using? If you're not sure, I recommend [Express
 
 ## Step 4.5: Subscription Event Selection (Conditional)
 
-**Only when the developer selected both Subscription and Webhook in Step 3.**
+**Only when the developer selected Subscription in Step 3.** Events are auto-registered by default (see Webhook Auto-Derive above), but ask if they need additional events:
 
-Ask: "Subscription has several webhook events — which ones matter for your use case?"
+Ask: "Subscription webhook events are auto-configured. Do you also need these optional events?"
 
 | Use Case | Recommended Event | Handler |
 |----------|-------------------|---------|
@@ -340,6 +358,143 @@ Step 7 can be entered two ways:
 1. **After Step 6** — natural continuation after writing integration code
 2. **Direct trigger** — developer says "跑集成测试" on an already-integrated project
 
+### Phased Execution (MANDATORY)
+
+Step 7 is split into 4 phases with explicit checkpoints. This prevents context exhaustion.
+
+```
+Phase A — Core Tests (~15 tool calls):
+  order-create → payment-success → payment-failure
+  → order-create-error → webhook-idempotency
+  ✓ Checkpoint: output Phase A results
+
+Phase B — Pay Method Coverage (sequential batch in main session):
+  payMethodConfig().inquiry() → build minimum test set (§Pay Method Discovery)
+  → create orders via curl → pay each sequentially via browser_run_code
+  ✓ Checkpoint: output Phase B results
+
+Phase C1 — Refund (~10 tool calls):
+  refund-success → refund-inquiry → refund-webhook
+  ✓ Checkpoint: output Phase C1 results
+
+Phase C2 — Subscription (~15 tool calls):
+  subscription-create → inquiry → renewal → cancel
+  subscription-change → change-inquiry (if integrated)
+  ✓ Checkpoint: output Phase C2 results
+
+Phase D — Passive Verification + Report (~5 tool calls):
+  Code review 15 items → generate final report with all phase results
+```
+
+- Phase A MUST complete in the current session
+- Phase B runs sequentially in main session (see Browser Conflict Warning below)
+- Phase C1 may continue in same session or handoff to new session if context is low
+- Phase C2 may continue in same session or handoff to new session if context is low
+- **Phase D is BLOCKED until Phase A + B + C1 + C2 are ALL complete** — do NOT generate the report while any phase is still running or has pending background agents. If a background agent was dispatched, you MUST wait for its completion notification before starting Phase D.
+- **Execution order is strict**: A → B → C1 → C2 → D. Do NOT start a later phase while an earlier phase has unfinished work (including background agents). The only exception: C1 API-only tests (curl) may run while Phase B browser tests execute, but Phase D report MUST wait for all.
+
+### Browser Conflict Warning (CRITICAL)
+
+**Playwright MCP uses a single shared browser instance.** If you dispatch a subagent that uses Playwright, it will compete with the main session for the same browser — causing page navigation conflicts, stale selectors, and flaky test results.
+
+**Rules:**
+- **NEVER** dispatch regular (non-isolated) subagents to run Playwright tests
+- Phase B card brand tests MUST use one of these two strategies:
+
+#### Strategy 1: Sequential Batch in Main Session (DEFAULT — recommended)
+
+Run all card brand payments sequentially in the main session using `browser_run_code`. Each card takes ~3 tool calls (navigate + run_code + verify). For 4-8 card brands this is ~12-24 tool calls — well within budget.
+
+```
+1. Main session: Create ALL orders via curl (fast, no browser)
+2. For each card brand sequentially:
+   a. browser_navigate to checkout URL
+   b. browser_run_code: fill card + submit + wait for result
+   c. Verify result (screenshot or text check)
+3. Collect all results, output Phase B summary
+```
+
+#### Strategy 2: Isolated Agents (when context budget is tight)
+
+If context is running low and you need to offload Phase B, dispatch agents with `isolation: "worktree"` — but note they still share the Playwright browser. To truly isolate:
+
+1. **Main session finishes ALL Playwright work first** (Phase A payment tests)
+2. **Main session stops using Playwright** (no more browser calls)
+3. **Then** dispatch a single agent (not parallel) to run Phase B card tests
+4. Wait for agent to complete before resuming Playwright in main session
+
+**NEVER run Playwright in main session and an agent simultaneously.**
+
+### Context Budget Rules
+
+Before starting Step 7, estimate the tool call budget:
+
+| Mode | Calls per card payment | 8 card brands total |
+|------|----------------------|-------------------|
+| Step-by-step Playwright | ~12 | ~96 (❌ exceeds budget) |
+| `browser_run_code` batch | ~3 (navigate + run_code + verify) | ~24 (✅ fits in main session) |
+
+**Rules:**
+- ALWAYS use `browser_run_code` batch mode (§2 Batch Mode) instead of step-by-step clicks
+- Run card brand tests sequentially in main session (Strategy 1) by default
+- Only use Strategy 2 if context is critically low AND main session has stopped using Playwright
+
+### Loop Mode — Fix-and-Retry Protocol
+
+When a test FAILS, follow this loop instead of just recording the failure:
+
+```
+Execute test → FAIL → Classify failure → Fix if possible → Rebuild → Re-run
+```
+
+**Classification:**
+
+| Type | Examples | Action |
+|------|---------|--------|
+| `FIXABLE_CODE` | Wrong field name, missing field, logic error, type mismatch | Diagnose → Edit fix → rebuild → re-run |
+| `FIXABLE_INFRA` | Tunnel down, server not running, config missing | Restore infra → re-run (no code change) |
+| `NOT_FIXABLE` | Sandbox limitation, needs user architectural decision | Record SKIP/BLOCKED, ask user if needed |
+
+**Loop rules:**
+- Max **3 fix attempts** per test case
+- After fix: only re-run the **failed test + its dependents** (not all tests)
+- Each fix must be **minimal and targeted** — do not refactor
+- **Track all fixes** — record root cause + fix location for the report
+
+**Rebuild protocol (after code fix):**
+```bash
+# Go projects
+go build -o /tmp/new-api-waffo . && kill $(lsof -ti:$PORT) 2>/dev/null
+/tmp/new-api-waffo --port $PORT &
+sleep 3 && curl -s http://localhost:$PORT/api/status
+
+# Node.js projects
+npm run build && pm2 restart app  # or kill + node start
+
+# Java projects
+mvn compile -q && kill $(lsof -ti:$PORT) 2>/dev/null
+java -jar target/*.jar &
+```
+
+**State tracking across retries:**
+Maintain a `test_state` dict across test cases:
+- `order-create` → saves `{orderID, checkoutURL, acquiringOrderID}`
+- `payment-success` → saves `{paidOrderID, quotaBefore, quotaAfter}`
+- `refund-success` → saves `{refundRequestID}`
+- `subscription-create` → saves `{subscriptionRequest, subscriptionID}`
+
+When re-running after fix, check if dependent state needs refresh (e.g., if order-create was fixed, payment-success needs a new order).
+
+**Fix log format (included in report):**
+```
+Test: payment-success
+  Attempt 1: FAIL — webhook not processed, order stuck in pending
+    Root cause: notifyURL used stale ServerAddress
+    Fix: Updated ServerAddress option via API
+  Attempt 2: PASS ✓
+  Fixes applied: 1
+```
+
 ### Business Validation References (MANDATORY — read before testing)
 
 Before generating any test, read these reference files:
@@ -353,7 +508,7 @@ Before generating any test, read the project's code to understand:
 1. **Routes**: Find Waffo-related HTTP endpoints (e.g., `router/`, `routes/`, `app.ts`)
 2. **Controllers**: Understand request/response format, authentication requirements
 3. **Webhook handler**: Understand what business logic runs on payment success/failure (e.g., recharge balance, update order status)
-4. **Pay methods**: Read project config for contracted payment methods
+4. **Pay methods**: Call `payMethodConfig().inquiry()` using the project's SDK credentials to get the **actual contracted pay methods** (source of truth). Filter `currentStatus == "1"` only. Then apply the pay method simplification rules (§Pay Method Discovery) to build the minimum test set.
 5. **Credentials**: Check env vars, config files, database options for Sandbox credentials
 6. **Feature scope**: Determine which features are integrated → map to applicable test items
 
@@ -363,7 +518,8 @@ Context Discovery:
   Order endpoint:    POST /api/waffo/pay (auth: JWT)
   Webhook endpoint:  POST /api/waffo/webhook (no auth, signature verified)
   Business logic:    Webhook success → RechargeWaffo() → add balance
-  Pay methods:       CREDITCARD,DEBITCARD / APPLEPAY / GOOGLEPAY
+  Pay methods (API): 12 contracted (8 active) — see minimum test set below
+  Minimum test set:  CC_VISA, DANA, BCA_VA, OVO, PIX (5 methods, per simplification rules)
   Credentials:       Found in database options (Sandbox)
   Features:          Order Create + Webhook (no Cancel/Refund/Subscription)
   Applicable tests:  order-create, payment-success, payment-failure, order-create-error, webhook-idempotency, pay-method-coverage
@@ -389,7 +545,7 @@ Read `references/acceptance-criteria.md` for the full criteria definitions. The 
 | payment-failure | Playwright pays with failure card → webhook arrives → project does NOT execute business logic |
 | order-create-error | Trigger SDK error via project endpoint → project returns error, marks local order as failed |
 | webhook-idempotency | Send same webhook notification twice → business logic executes only once |
-| pay-method-coverage | **Every contracted card brand** tested with a full payment-success cycle. Use §1 test cards for each. Non-card methods (APPLEPAY, GOOGLEPAY) marked SKIP. |
+| pay-method-coverage | **Minimum test set** from Pay Method Discovery (§Step 3). Each selected method tested with a full payment-success cycle. APPLEPAY/GOOGLEPAY marked MANUAL. |
 
 **Refund (if integrated):**
 
@@ -430,16 +586,20 @@ For each applicable test item:
 order-create → payment-success → webhook-idempotency
 order-create → payment-failure
 order-create-error (independent)
-payment-success → pay-method-coverage (repeat with ALL contracted card brands)
-payment-success → refund-success → refund-inquiry, refund-webhook
-subscription-create → subscription-inquiry, subscription-renewal, subscription-cancel
-subscription-change → subscription-change-inquiry
+payment-success → pay-method-coverage (minimum test set from Pay Method Discovery)
+payment-success → refund-success → refund-inquiry, refund-webhook        [Phase C1]
+subscription-create → subscription-inquiry, subscription-renewal, subscription-cancel  [Phase C2]
+subscription-change → subscription-change-inquiry                        [Phase C2]
 ```
 
 ### Playwright Checkout Protocol
 
-When a test requires completing payment on the checkout page, follow `references/acceptance-criteria.md` §2 (Playwright Protocol). Key points:
+When a test requires completing payment on the checkout page, follow `references/acceptance-criteria.md` §2 (Playwright Protocol).
 
+**ALWAYS use Batch Mode** (`browser_run_code`) as the primary approach — it completes an entire card payment in 1 tool call instead of ~12. Only fall back to step-by-step mode if `browser_run_code` is unavailable or fails.
+
+Key points:
+- Batch Mode: `browser_navigate` → `browser_run_code` (fills all fields + submits + waits for result) → parse JSON result
 - Use `pressSequentially` (slowly) for card fields, NOT `fill()`
 - Wait for "Processing Payment..." to disappear
 - Verify result page shows correct redirect URL in "Confirm" link
@@ -447,10 +607,61 @@ When a test requires completing payment on the checkout page, follow `references
 
 ### Pay Method Discovery
 
-Before pay-method-coverage, enumerate **all** contracted pay methods from project config:
-- **Card-based methods** (CREDITCARD, DEBITCARD) → map to test cards in `references/acceptance-criteria.md` §1. Execute a full payment-success cycle **once per testable card brand** — ALL of them, not just a minimum.
-- **Non-card methods** (e-wallets, bank transfers, etc.) → create an order specifying that pay method, get the checkout URL, then open it with Playwright and check if the Sandbox checkout page provides a "simulate success" / "mock payment" button. If yes → click it to complete the test. If no simulation is available → SKIP with reason.
-- **APPLEPAY / GOOGLEPAY** → SKIP. These require a real mobile device with Apple Pay / Google Pay configured. Inform the integrator: "APPLEPAY and GOOGLEPAY must be tested manually on a real device — create an order, open the checkout URL on your phone, and complete payment using the device's native payment flow."
+#### Step 1: Get contracted methods
+
+Call `payMethodConfig().inquiry()` with the project's SDK credentials. Filter `currentStatus == "1"`. This is the **source of truth** — do not rely on project config alone.
+
+#### Step 2: Classify by type
+
+Use this static mapping (until API returns `payMethodType` directly):
+
+| Type | payMethodName values |
+|------|---------------------|
+| CARD | VISA, MASTERCARD, JCB, AMEX, UNIONPAY |
+| EWALLET | GCASH, ALIPAY, WECHATPAY, DANA, SHOPEEPAY, KAKAOPAY, LINEPAY, TRUEMONEY, GRABPAY, MOMO, ZALOPAY, BOOST, TNG |
+| VA | BCA_VA, BNI_VA, MANDIRI_VA, PERMATA_VA, CIMB_VA, BRI_VA |
+| BANK_TRANSFER | PIX, FPX, DOKU, PROMPTPAY |
+| OTC | ALFAMART, INDOMARET |
+| DEVICE_PAY | APPLEPAY, GOOGLEPAY |
+| SPECIAL_PARAMS | OVO (requires phone), PIX (requires CPF) |
+
+Unknown methods: classify by suffix (`_VA` → VA) or default to EWALLET. Log a warning for manual review.
+
+#### Step 3: Build minimum test set
+
+Apply these simplification rules to select the **minimum required test set**:
+
+| Rule | Description |
+|------|-------------|
+| Per country per type, at least 1 | e.g., ID e-wallet test 1, ID bank transfer test 1 |
+| App-class at least 1 | GCash / Alipay / WeChat — pick one that is contracted |
+| Special-params methods must test | OVO (phone field), PIX (CPF field) — parameter structure differs |
+| Card at least 1 | Credit or debit, any brand |
+| VA at least 1 | Verify VA-specific parameter passing |
+| APPLEPAY / GOOGLEPAY | Mark MANUAL — requires real device, inform integrator to self-test |
+
+Output the selected test set with reason for each inclusion/exclusion:
+```
+Pay Method Test Set (6 of 15 contracted):
+  ✓ CC_VISA      — card representative
+  ✓ DANA         — ID e-wallet representative
+  ✓ BCA_VA       — VA representative
+  ✓ OVO          — special params (phone required)
+  ✓ PIX          — special params (CPF required)
+  ✓ GCASH        — app-class representative
+  ○ APPLEPAY     — MANUAL (real device required)
+  ○ GOOGLEPAY    — MANUAL (real device required)
+  - MASTERCARD   — skipped (card already covered by VISA)
+  - SHOPEEPAY    — skipped (ID e-wallet already covered by DANA)
+  ...
+```
+
+#### Step 4: Execute tests
+
+For each method in the minimum test set:
+- **Card** → map to test cards in `references/acceptance-criteria.md` §1. Execute a full payment-success cycle.
+- **Non-card** → create order with that pay method, open checkout URL with Playwright, look for Sandbox "simulate success" button. If found → click and verify. If not found → SKIP with reason.
+- **APPLEPAY / GOOGLEPAY** → mark MANUAL. Inform integrator: "Create an order, open checkout URL on your phone, complete payment using the device's native payment flow."
 
 ### Business Logic Verification
 
@@ -469,7 +680,7 @@ After all test items are executed, evaluate:
 | # | Check | Evaluate |
 |---|-------|----------|
 | C1 | All applicable tests executed | Were any test items skipped that should have been tested? |
-| C2 | Pay method coverage | **All** contracted card brands tested? Non-testable methods documented? |
+| C2 | Pay method coverage | **Minimum test set** all tested? Skipped methods documented with reason? APPLEPAY/GOOGLEPAY marked MANUAL? |
 | C3 | Business logic verified | Was the project's actual behavior checked (not just API response)? |
 | C4 | Redirect URLs verified | Were success/failure redirect URLs asserted from checkout result page? |
 
@@ -503,6 +714,7 @@ Include the full Code Review results in the verification report under "Passive V
 
 Generate report per `references/acceptance-criteria.md` §4 template. Include:
 - Test item results (PASS/FAIL/SKIP per item, using descriptive names)
+- Fixes applied during testing (if Loop Mode was triggered)
 - Checklist results (C1-C4)
 - Overall verdict (FULL / CONDITIONAL / INCOMPLETE)
 - Failed items with details

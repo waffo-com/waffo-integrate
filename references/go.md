@@ -484,6 +484,16 @@ func WebhookHandler() gin.HandlerFunc {
 
 		handler := client.Webhook().
 			OnPayment(func(n *core.PaymentNotification) {
+				// NOTE: If Subscription is also integrated, add this filter to skip subscription payments:
+				// if n.Result.PaymentInfo != nil {
+				//     pn := n.Result.PaymentInfo.ProductName
+				//     if pn == "SUBSCRIPTION" || pn == "MINI_PROGRAM_SUBSCRIPTION" {
+				//         // Subscription payments are handled by onSubscriptionStatus / onSubscriptionPeriodChanged
+				//         // If you need to handle failed orders during subscription billing, add logic here
+				//         return
+				//     }
+				// }
+
 				// Three-stage pattern: idempotency → lock → transaction
 				// Stage 1: Find local order by paymentRequestID, skip if already terminal
 				// Stage 2: Lock the order (mutex or DB row lock) to prevent duplicate processing
@@ -562,6 +572,9 @@ func WebhookEchoHandler(c echo.Context) error {
 
 	handler := client.Webhook().
 		OnPayment(func(n *core.PaymentNotification) {
+			// NOTE: If Subscription is also integrated, uncomment this filter:
+			// pn := n.Result.PaymentInfo.ProductName
+			// if pn == "SUBSCRIPTION" || pn == "MINI_PROGRAM_SUBSCRIPTION" { return }
 			log.Printf("Payment: status=%s", n.Result.OrderStatus)
 		}).
 		OnRefund(func(n *core.RefundNotification) {
@@ -596,6 +609,9 @@ func WebhookFiberHandler(c *fiber.Ctx) error {
 
 	handler := client.Webhook().
 		OnPayment(func(n *core.PaymentNotification) {
+			// NOTE: If Subscription is also integrated, uncomment this filter:
+			// pn := n.Result.PaymentInfo.ProductName
+			// if pn == "SUBSCRIPTION" || pn == "MINI_PROGRAM_SUBSCRIPTION" { return }
 			log.Printf("Payment: status=%s", n.Result.OrderStatus)
 		}).
 		OnRefund(func(n *core.RefundNotification) {

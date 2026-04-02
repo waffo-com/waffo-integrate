@@ -355,6 +355,16 @@ router.post('/waffo/webhook',
 
     const handler = waffo.webhook()
       .onPayment((notification) => {
+        const result = notification.result;
+
+        // NOTE: If Subscription is also integrated, add this filter to skip subscription payments:
+        // const productName = result?.paymentInfo?.productName;
+        // if (productName === 'SUBSCRIPTION' || productName === 'MINI_PROGRAM_SUBSCRIPTION') {
+        //   // Subscription payments are handled by onSubscriptionStatus / onSubscriptionPeriodChanged
+        //   // If you need to handle failed orders during subscription billing, add logic here
+        //   return;
+        // }
+
         // Three-stage pattern: idempotency → lock → transaction
         // Stage 1: Find local order by paymentRequestId, skip if already terminal
         // Stage 2: Lock the order to prevent duplicate processing
@@ -363,7 +373,6 @@ router.post('/waffo/webhook',
         // Key fields: result.paymentRequestId, result.orderStatus, result.acquiringOrderId
         // PAY_SUCCESS → execute business logic (e.g., add balance/quota)
         // ORDER_CLOSE → mark order as expired/failed
-        const result = notification.result;
         console.log(`Payment: paymentRequestId=${result?.paymentRequestId}, orderStatus=${result?.orderStatus}, acquiringOrderId=${result?.acquiringOrderId}`);
       })
       .onRefund((notification) => {
@@ -429,9 +438,11 @@ export class WaffoWebhookController {
 
     const handler = waffo.webhook()
       .onPayment((notification) => {
+        const result = notification.result;
+        // NOTE: If Subscription is also integrated, add productName filter here
+        // (skip 'SUBSCRIPTION' / 'MINI_PROGRAM_SUBSCRIPTION' — see Express template above)
         // Three-stage pattern: idempotency → lock → transaction
         // Key fields: result.paymentRequestId, result.orderStatus, result.acquiringOrderId
-        const result = notification.result;
         console.log(`Payment: paymentRequestId=${result?.paymentRequestId}, orderStatus=${result?.orderStatus}`);
       })
       .onRefund((notification) => {
@@ -470,9 +481,11 @@ export async function waffoWebhookRoute(fastify: FastifyInstance) {
 
     const handler = waffo.webhook()
       .onPayment((notification) => {
+        const result = notification.result;
+        // NOTE: If Subscription is also integrated, add productName filter here
+        // (skip 'SUBSCRIPTION' / 'MINI_PROGRAM_SUBSCRIPTION' — see Express template above)
         // Three-stage pattern: idempotency → lock → transaction
         // Key fields: result.paymentRequestId, result.orderStatus, result.acquiringOrderId
-        const result = notification.result;
         console.log(`Payment: paymentRequestId=${result?.paymentRequestId}, orderStatus=${result?.orderStatus}`);
       })
       .onRefund((notification) => {

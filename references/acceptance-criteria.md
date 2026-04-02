@@ -24,7 +24,55 @@ All test cards use: **Expiry: 12/2029, CVV: 123, Cardholder: TEST USER**
 
 ## §2 Playwright Checkout Protocol
 
-When a test requires completing payment on the checkout page:
+When a test requires completing payment on the checkout page, **prefer the Batch Mode** (single `browser_run_code` call) over the Step-by-Step Mode to minimize context consumption.
+
+### Batch Mode (PREFERRED — 1 tool call per payment)
+
+Use `browser_run_code` to execute the entire checkout flow in a single call. This reduces ~12 tool calls to 1, which is critical for pay-method-coverage where multiple card brands are tested.
+
+```js
+// Parameters: cardNumber, expectSuccess (true/false)
+const cardNumber = '{{CARD_NUMBER}}';
+
+// Fill card details using pressSequentially (not fill)
+const cardField = page.locator('input[autocomplete="cc-number"], [placeholder*="1234"]').first();
+await cardField.click();
+await cardField.pressSequentially(cardNumber, { delay: 50 });
+
+const expiryField = page.locator('input[autocomplete="cc-exp"], [placeholder*="mm"]').first();
+await expiryField.click();
+await expiryField.pressSequentially('1229', { delay: 50 });
+
+const cvvField = page.locator('input[autocomplete="cc-csc"], [placeholder*="CVV"]').first();
+await cvvField.click();
+await cvvField.pressSequentially('123', { delay: 50 });
+
+const nameField = page.getByRole('textbox', { name: /cardholder/i });
+await nameField.click();
+await nameField.pressSequentially('TEST USER', { delay: 30 });
+
+// Submit
+await page.getByRole('button', { name: 'Pay' }).click();
+
+// Wait for result (success or failure page)
+await page.locator('h1:has-text("Payment Successful"), h1:has-text("Payment Failed")')
+  .first().waitFor({ state: 'visible', timeout: 30000 });
+
+// Extract result
+const heading = await page.locator('h1').first().textContent();
+const confirmLink = await page.locator('a:has-text("Confirm")').getAttribute('href');
+const isSuccess = heading.includes('Successful');
+
+return JSON.stringify({ success: isSuccess, heading, redirectUrl: confirmLink });
+```
+
+**Usage**: Navigate to checkout URL first (`browser_navigate`), then run this code via `browser_run_code`. Parse the returned JSON to determine PASS/FAIL.
+
+**For subscription checkout**: The same batch script works — subscription checkout pages use the same card form structure.
+
+### Step-by-Step Mode (FALLBACK — when batch mode fails)
+
+Use this mode only if `browser_run_code` is not available or if the batch script fails (e.g., checkout page structure changed). Each step is a separate tool call:
 
 1. **Navigate**: `browser_navigate` to the checkout URL
 2. **Wait**: `browser_wait_for` the payment form to load
@@ -72,7 +120,7 @@ For non-card methods (e-wallets, bank transfers, etc.) in Sandbox:
 | payment-failure | **Payment failure** | Create new order via project endpoint → Playwright fills failure test card (§1) → wait for terminal status. Verify: (1) order status updated to failed in project database, (2) business logic NOT executed (e.g., balance unchanged), (3) redirect URL correct on result page. |
 | order-create-error | **Order creation failure** | Call project's order creation endpoint with invalid params (e.g., amount below minimum, or missing required fields) → Verify project returns user-friendly error message and local order is marked as failed (not left in pending). |
 | webhook-idempotency | **Webhook idempotency** | After payment-success completes, replay the same webhook notification to the project's webhook endpoint (use the same payload captured from payment-success or reconstruct it). Verify business logic does NOT execute a second time (e.g., balance doesn't increase again). |
-| pay-method-coverage | **Pay method full coverage** | Test **every contracted pay method**: (1) Card-based methods — run payment-success once per card brand using matching §1 test card. (2) Non-card methods (e-wallets, bank transfers, etc.) — create an order with that pay method, open checkout URL with Playwright, look for a Sandbox "simulate success" button; if found, click it and verify webhook + business logic; if not found, SKIP with reason. (3) APPLEPAY / GOOGLEPAY — SKIP with reason "requires real mobile device"; inform integrator to test manually on phone. |
+| pay-method-coverage | **Pay method coverage (minimum test set)** | Call `payMethodConfig().inquiry()` to get contracted methods → apply simplification rules (SKILL.md §Pay Method Discovery Step 3) to build minimum test set → test each selected method: (1) Card — at least 1 brand via §1 test card. (2) E-wallet — at least 1 per country (prefer GCash/Alipay/WeChat for app-class). (3) VA — at least 1 to verify parameter passing. (4) Special-params (OVO, PIX) — must test due to unique required fields. (5) APPLEPAY / GOOGLEPAY — mark MANUAL, inform integrator to test on real device. Report includes full contracted list with tested/skipped/manual status and reason for each. |
 
 ### Refund (if project integrates refund)
 
@@ -95,8 +143,18 @@ For non-card methods (e-wallets, bank transfers, etc.) in Sandbox:
 
 | ID | Criteria | How to verify |
 |----|----------|---------------|
-| subscription-change | **Subscription change** | Call project's subscription change endpoint → change succeeds. Verify status updated. |
-| subscription-change-inquiry | **Change inquiry** | Call project's change query endpoint → returns correct change status. |
+| subscription-change | **Subscription change** | Call project's subscription change endpoint (e.g., upgrade plan or change billing cycle) → change succeeds. Verify: (1) change status updated in project database, (2) new plan/amount/period reflected in subscription record, (3) change webhook received and processed if applicable. |
+| subscription-change-inquiry | **Change inquiry** | Call project's change query endpoint → returns correct change status and updated subscription details matching the change request. |
+
+### Subscription — exception scenarios (verified during basic + change tests)
+
+These are NOT separate test items — they are **expected observations** during subscription testing. If any occurs unexpectedly, the related test item FAILS.
+
+| Scenario | When to observe | What to check |
+|----------|----------------|---------------|
+| Renewal failure → cancel | During subscription-renewal if failure card is used | Project handles renewal failure notification correctly (e.g., marks subscription as past-due, notifies user), does NOT immediately cancel |
+| Change after renewal | During subscription-change if renewal just completed | Change applies to the new period, not the current one |
+| Cancel during renewal | During subscription-cancel if renewal is in progress | Cancel takes effect, pending renewal is handled gracefully |
 
 ### Execution Dependencies
 
@@ -104,10 +162,10 @@ For non-card methods (e-wallets, bank transfers, etc.) in Sandbox:
 order-create → payment-success → webhook-idempotency
 order-create → payment-failure
 order-create-error (independent)
-payment-success → pay-method-coverage (repeat with ALL contracted card brands)
-payment-success → refund-success → refund-inquiry, refund-webhook
-subscription-create → subscription-inquiry, subscription-renewal, subscription-cancel
-subscription-change → subscription-change-inquiry
+payment-success → pay-method-coverage (minimum test set from payMethodConfig inquiry)
+payment-success → refund-success → refund-inquiry, refund-webhook              [Phase C1]
+subscription-create → subscription-inquiry, subscription-renewal, subscription-cancel  [Phase C2]
+subscription-change → subscription-change-inquiry                              [Phase C2]
 ```
 
 ---
@@ -198,6 +256,13 @@ subscription-change → subscription-change-inquiry
 ║   □ Merchant timeout: ≥ 8s minimum, 15s recommended                    ║
 ║   □ DNS cache time: 60s (Waffo multi-gateway disaster recovery)         ║
 ║   □ If server in mainland China: latency risk, consider SDWAN/VPN       ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║ Fixes Applied During Testing                                            ║
+║   (Only present if Loop Mode applied fixes during test execution)       ║
+║   #1 {test-item} (attempt N→N+1)                                       ║
+║      Root cause: {description}                                          ║
+║      Fix: {file:line — what changed}                                    ║
+║   Total: {N} fixes, {M} unresolved                                     ║
 ╠══════════════════════════════════════════════════════════════════════════╣
 ║ Remediation                                                             ║
 ║   {list items that need fixing before go-live}                          ║

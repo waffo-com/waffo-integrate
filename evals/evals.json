@@ -146,6 +146,64 @@
           "critical": true
         }
       ]
+    },
+    {
+      "id": 5,
+      "prompt": "Integrate Waffo into my Go Gin project at ./my-project. I need payments, refunds, AND subscriptions. All features. Use default options (WEB, Waffo checkout, payment-first, need subscription refund, USD, no iframe, default expiry).",
+      "expected_output": "Should NOT ask about webhook as a separate feature. Should auto-include onPayment, onRefund, onSubscriptionStatus, onSubscriptionPeriodChanged handlers. The onPayment handler MUST filter out subscription payments by checking productName. Should ask about framework (Gin detected).",
+      "files": [],
+      "assertions": [
+        {
+          "name": "no_webhook_question",
+          "type": "output_not_contains",
+          "check": "Does NOT ask 'Do you need to receive real-time notifications' or present Webhook as a separate feature choice",
+          "critical": true
+        },
+        {
+          "name": "auto_includes_webhook_handlers",
+          "type": "output_contains",
+          "check": "Generated code includes onPayment, onRefund, onSubscriptionStatus, and onSubscriptionPeriodChanged handlers without user selecting webhook",
+          "critical": true
+        },
+        {
+          "name": "onPayment_filters_subscription",
+          "type": "output_contains",
+          "check": "onPayment handler checks productName and skips SUBSCRIPTION/MINI_PROGRAM_SUBSCRIPTION with a return statement",
+          "critical": true
+        },
+        {
+          "name": "subscription_skip_comment",
+          "type": "output_contains",
+          "check": "The productName filter includes a comment about handling failed subscription orders if needed",
+          "critical": false
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "I need to add Waffo payment to my Node.js Express project. Just one-time payments, no subscriptions. Project at ./my-project, credentials in .env.",
+      "expected_output": "Should auto-include onPayment webhook handler. Should NOT include subscription webhook handlers. The onPayment handler should NOT have the productName subscription filter since subscriptions are not integrated.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "auto_includes_onPayment",
+          "type": "output_contains",
+          "check": "Generated code includes onPayment handler without asking about webhook separately",
+          "critical": true
+        },
+        {
+          "name": "no_subscription_handlers",
+          "type": "output_not_contains",
+          "check": "Does NOT include onSubscriptionStatus or onSubscriptionPeriodChanged since subscription was not selected",
+          "critical": true
+        },
+        {
+          "name": "no_subscription_filter_in_onPayment",
+          "type": "output_not_contains",
+          "check": "onPayment handler does NOT check for SUBSCRIPTION productName since there are no subscriptions to conflict with",
+          "critical": false
+        }
+      ]
     }
   ]
 }
