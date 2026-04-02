@@ -36,57 +36,76 @@ Copy the `SKILL.md` and `references/` directory into your project. Point your AI
 
 ## What it does
 
-An 8-step interactive wizard that:
+An 7-step interactive wizard that:
 
 1. **Detects language** — Node.js / Java / Go (auto-detect or ask)
 2. **Checks project status** — existing project or new scaffold
-3. **Selects features** — payments, refunds, subscriptions, webhooks, config queries
+3. **Selects features** — payments, refunds, subscriptions (webhook auto-derived)
 4. **Picks framework** — Express, Spring Boot, Gin, etc.
 5. **Previews code** — shows complete integration code for review
 6. **Writes to project** — installs SDK dependency + generates files
-7. **Generates tests** — Sandbox integration tests (or stubs if no credentials)
-8. **Verifies locally** — tunnel setup + end-to-end payment + webhook verification
+7. **Verifies integration** — phased end-to-end testing with Markdown acceptance report
 
 ### Built-in safeguards
 
-13 API contract rules prevent common integration mistakes:
+31 API contract rules prevent common integration mistakes:
 
 - UUID request IDs exceeding 32-character limit
 - Subscription field name confusion (`currency` vs `orderCurrency`)
 - Missing required fields (`payMethodType`, `userTerminal`, `goodsInfo`)
 - Invalid enum values (`YEARLY` is not a valid `periodType`)
-- Incorrect SDK initialization patterns (e.g. non-existent `fromProperties()` in Java)
+- Webhook Content-Type not set (`text/plain` instead of `application/json`)
+- All 5 webhook handlers must implement three-stage pattern (idempotency + lock + transaction)
+- All 7 write operations must catch `WaffoUnknownStatusError`
+- Refund currency must match original order currency
+- Currency parameterization for multi-currency projects
+
+### Integration verification (Step 7)
+
+Phased test execution with automatic fix-and-retry:
+
+- **Phase A** — Core tests: order-create, payment-success/failure, webhook-idempotency
+- **Phase B1/B2** — Pay method coverage: card + non-card (minimum test set from API discovery)
+- **Phase C1** — Refund tests
+- **Phase C2** — Subscription lifecycle tests
+- **Phase D** — Passive verification (21 code review items) + Go-Live questionnaire + Markdown report
+
+Active checklist (C1-C8) + 21 passive verification items + Sandbox knowledge base (K024-K030).
 
 ### Progressive disclosure
 
-Only the main SKILL.md is loaded initially (~450 lines). Language-specific templates and the API contract reference are loaded on demand, saving tokens.
+Only the main SKILL.md is loaded initially (~380 lines). Language-specific templates, verification protocol, and reference files are loaded on demand, saving tokens.
 
 ```
 waffo-integrate/
-├── SKILL.md                  # Integration flow + 13 rules
+├── SKILL.md                              # Integration flow + 31 rules (~380 lines)
 ├── references/
-│   ├── api-contract.md       # Field definitions + status handling guide
-│   ├── node.md               # Node.js/TypeScript templates
-│   ├── java.md               # Java/Spring Boot templates
-│   └── go.md                 # Go templates
+│   ├── api-contract.md                   # Field definitions + status handling
+│   ├── node.md                           # Node.js/TypeScript templates
+│   ├── java.md                           # Java/Spring Boot templates
+│   ├── go.md                             # Go templates
+│   ├── integration-verification.md       # Step 7 verification protocol
+│   ├── acceptance-criteria.md            # Test cards, Playwright scripts, report template
+│   ├── sandbox-knowledge.md              # Sandbox quirks (K024-K030)
+│   └── business-validation.md            # Passive verification checklist
+├── docs/
+│   └── INDEX.md                          # Knowledge base index + remote fallback
 └── evals/
-    └── evals.json            # Evaluation test cases
+    └── evals.json                        # 6 eval scenarios, 26 assertions
 ```
 
 ## Evaluation results
 
-Built and tested with Anthropic's official [skill-creator](https://github.com/anthropics/claude-code/tree/main/plugins/skill-creator) plugin. 3 iterations of A/B testing (with skill vs without skill), 3 scenarios, 16 assertions:
+Built and tested with Anthropic's official [skill-creator](https://github.com/anthropics/claude-code/tree/main/plugins/skill-creator) plugin. 6 scenarios, 26 assertions:
 
-| Metric | With Skill | Without Skill |
-|--------|-----------|---------------|
-| Pass rate | **100%** (16/16) | 75% (12/16) |
-| Avg time | 128s | 192s (**-33%**) |
-| Avg tokens | 58.8k | 66.3k (**-11%**) |
-
-Consistent failure patterns without the skill across all 3 iterations:
-- Subscription missing `goodsInfo` (3/3 rounds)
-- Subscription missing `payMethodType` (3/3 rounds)
-- Java using non-existent `WaffoConfig.fromProperties()` (3/3 rounds)
+| Eval | Scenario | Assertions | Result |
+|------|----------|-----------|--------|
+| 1 | Node.js payment + refund | 4 | PASS |
+| 2 | Node.js subscription | 5 | PASS |
+| 3 | Java Spring Boot webhook | 5 | PASS |
+| 4 | Go integration verification | 5 | PASS |
+| 5 | Go full features (webhook auto-derive) | 4 | PASS |
+| 6 | Node.js payment only (no subscription filter) | 3 | PASS |
 
 ## Requirements
 
