@@ -4,15 +4,15 @@ This file is loaded during **Step 7** test execution only. Contains Sandbox-spec
 
 ---
 
-## K024: Credit Card Refund Does Not Trigger Webhook in Sandbox
+## K024: Refund Testing — Do NOT Use Card Payments
 
 **Symptom**: After refunding a credit card payment in Sandbox, `REFUND_NOTIFICATION` webhook is never delivered.
 
 **Root Cause**: Sandbox limitation — credit card refund webhooks are not simulated.
 
-**Workaround**: To test refund webhook handling, use **DANA** (e-wallet) payment method instead of credit cards. DANA refunds in Sandbox do trigger `REFUND_NOTIFICATION`.
+**Strategy**: Test refund flows using **e-wallet payments** (e.g., DANA), NOT card payments. E-wallet refunds in Sandbox do trigger `REFUND_NOTIFICATION` correctly.
 
-**Impact on Testing**: If the merchant only has card methods contracted, refund-webhook test must be marked SKIP with this reason. Verify refund status via `refund().inquiry()` API instead.
+**Impact on Testing**: Phase C1 (Refund) should create the source payment using an e-wallet method. If the merchant **only has card + APPLEPAY/GOOGLEPAY** (no e-wallet contracted), refund-webhook test must be marked **SKIP** — there is no way to trigger `REFUND_NOTIFICATION` in Sandbox. In this case, verify refund status via `refund().inquiry()` API polling instead.
 
 ---
 
@@ -65,6 +65,16 @@ This file is loaded during **Step 7** test execution only. Contains Sandbox-spec
 - Add small delays (1-2 seconds) between consecutive API calls during test execution
 - If rate limited, wait 5 seconds before retrying
 - Do NOT run pay-method-coverage tests in parallel — execute sequentially
+
+---
+
+## K028: Disable Rate Limiting Before Testing
+
+**Symptom**: Integration tests fail intermittently due to the project's own rate limiting middleware blocking rapid API calls.
+
+**Pre-flight Check**: Before starting Step 7, detect if the project has rate limiting (e.g., middleware, Redis-based throttle, Nginx rate limit). If found, **temporarily disable it** for the test session or whitelist the test client IP.
+
+**Why**: Integration tests make many API calls in quick succession (order-create, inquiry, refund, etc.). Project-level rate limiting will cause false failures that are unrelated to the integration itself.
 
 ---
 

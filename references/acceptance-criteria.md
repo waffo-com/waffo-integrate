@@ -172,101 +172,130 @@ subscription-change → subscription-change-inquiry                             
 
 ## §4 Report Template
 
-```
-╔══════════════════════════════════════════════════════════════════════════╗
-║                    Integration Acceptance Report                        ║
-╠══════════════════════════════════════════════════════════════════════════╣
-║ Overview                                                                ║
-║   Project: {project name}                                               ║
-║   Date: {date}                                                          ║
-║   SDK Version: {version}    Environment: Sandbox                        ║
-║   MID: {merchant ID}                                                    ║
-║   Features: {Order Payment, Webhook, Refund, Subscription...}           ║
-║   Pay Methods Contracted: {full list from merchant config}              ║
-║   Pay Methods Tested: {tested list}                                     ║
-╠═══════════════════════════╦════════╦═════════════════════════════════════╣
-║ Active Test Results       ║ Result ║ Details                             ║
-╠═══════════════════════════╬════════╬═════════════════════════════════════╣
-║ order-create              ║ PASS   ║ checkout URL returned               ║
-║ payment-success (CC_VISA) ║ PASS   ║ balance +100, webhook received      ║
-║ payment-failure (CC_VISA) ║ PASS   ║ balance unchanged                   ║
-║ order-create-error        ║ PASS   ║ error message correct               ║
-║ webhook-idempotency       ║ PASS   ║ no duplicate execution              ║
-║ pay-method: CC_VISA       ║ PASS   ║ payment + webhook verified          ║
-║ pay-method: CC_MASTER     ║ PASS   ║ payment + webhook verified          ║
-║ pay-method: DC_VISA       ║ PASS   ║ payment + webhook verified          ║
-║ pay-method: APPLEPAY      ║ SKIP   ║ requires real mobile device         ║
-║ refund-success            ║ PASS   ║ refund initiated                    ║
-║ refund-inquiry            ║ PASS   ║ status correct                      ║
-║ refund-webhook            ║ PASS   ║ local status updated                ║
-║ subscription-create       ║ PASS   ║ checkout URL + local record         ║
-║ ...                       ║ ...    ║ ...                                 ║
-╠═══════════════════════════╩════════╩═════════════════════════════════════╣
-║ Parameter Check                                                         ║
-║   orderDescription: specific description ✓                              ║
-║   goodsName / goodsUrl or appName: provided ✓                           ║
-║   userEmail: valid format, no "test" ✓                                  ║
-║   userTerminal: matches actual terminal ✓                               ║
-║   Time fields: ISO 8601 UTC+0 ✓                                        ║
-╠══════════════════════════════════════════════════════════════════════════╣
-║ Data Integrity Check                                                    ║
-║   Idempotency key persisted before API call: ✓                          ║
-║   acquiringOrderID stored: ✓                                            ║
-║   refundRequestId returned and persisted: ✓                             ║
-║   Redirect URLs (success + failed + cancel): ✓                          ║
-╠══════════════════════════════════════════════════════════════════════════╣
-║ Risk Items                                                              ║
-║   WaffoUnknownStatusError handling: ✓ retry + no close + inquiry        ║
-║   Webhook duplicate push protection: ✓ idempotency check               ║
-║   Concurrency safety: ✓ row-level lock                                  ║
-║   Amount precision: ✓ decimal library used                              ║
-╠══════════════════════════════════════════════════════════════════════════╣
-║ Passive Verification (Code Review) — 15 items                           ║
-║   Payment 1.3  C0005 channel rejection   : COVERED  file:line          ║
-║   Payment 1.4  A0011 idempotency         : COVERED  uuid per request   ║
-║   Payment 1.5  C0001 system unavailable  : COVERED  file:line          ║
-║   Payment 1.6  E0001 unknown status      : COVERED  file:line          ║
-║   Payment 3.3  webhook sig failure       : COVERED  SDK auto-reject    ║
-║   Payment 4.2  cancel channel rejection  : PARTIAL  no user message    ║
-║   ...                                                                   ║
-║   Subscription 3.5  sub webhook sig fail : COVERED  SDK auto-reject    ║
-║   ...                                                                   ║
-║   Summary: 13 COVERED / 1 PARTIAL / 1 MISSING                          ║
-╠══════════════════════════════════════════════════════════════════════════╣
-║ Pay Method Coverage                                                     ║
-║   CC_VISA      TESTED (payment-success)                                 ║
-║   CC_MASTER    TESTED (pay-method-coverage)                             ║
-║   DC_VISA      TESTED (pay-method-coverage)                             ║
-║   APPLEPAY     SKIP — requires real mobile device                       ║
-║   GOOGLEPAY    SKIP — requires real mobile device                       ║
-╠══════════════════════════════════════════════════════════════════════════╣
-║ Checklist                                                               ║
-║   C1 All applicable tests executed         : PASS                       ║
-║   C2 Pay method coverage (all card brands) : PASS                       ║
-║   C3 Business logic verified               : PASS                       ║
-║   C4 Redirect URLs verified                : PASS                       ║
-║   C5 Passive verification code review      : PARTIAL (1 MISSING)        ║
-╠══════════════════════════════════════════════════════════════════════════╣
-║ Verdict: CONDITIONAL                                                    ║
-╠══════════════════════════════════════════════════════════════════════════╣
-║ Next Actions (Pre-Go-Live)                                              ║
-║   □ If WeChat Pay: provide production domain to Waffo for registration  ║
-║   □ If Google Pay: apply for API access before production               ║
-║   □ If Apple Pay + iframe: Apple Pay cannot be used inside iframe       ║
-║   □ Merchant timeout: ≥ 8s minimum, 15s recommended                    ║
-║   □ DNS cache time: 60s (Waffo multi-gateway disaster recovery)         ║
-║   □ If server in mainland China: latency risk, consider SDWAN/VPN       ║
-╠══════════════════════════════════════════════════════════════════════════╣
-║ Fixes Applied During Testing                                            ║
-║   (Only present if Loop Mode applied fixes during test execution)       ║
-║   #1 {test-item} (attempt N→N+1)                                       ║
-║      Root cause: {description}                                          ║
-║      Fix: {file:line — what changed}                                    ║
-║   Total: {N} fixes, {M} unresolved                                     ║
-╠══════════════════════════════════════════════════════════════════════════╣
-║ Remediation                                                             ║
-║   {list items that need fixing before go-live}                          ║
-╚══════════════════════════════════════════════════════════════════════════╝
+Output the report in Markdown format:
+
+```markdown
+# Integration Acceptance Report
+
+## Overview
+
+| Field | Value |
+|-------|-------|
+| Project | {project name} |
+| Date | {date} |
+| SDK Version | {version} |
+| Environment | Sandbox |
+| MID | {merchant ID} |
+| Features | Order Payment, Webhook, Refund, Subscription... |
+| Pay Methods Contracted | {full list from payMethodConfig inquiry} |
+| Pay Methods Tested | {minimum test set} |
+
+## Active Test Results
+
+| Test Item | Result | Details |
+|-----------|--------|---------|
+| order-create | PASS | checkout URL returned |
+| payment-success (CC_VISA) | PASS | balance +100, webhook received |
+| payment-failure (CC_VISA) | PASS | balance unchanged |
+| order-create-error | PASS | error message correct |
+| webhook-idempotency | PASS | no duplicate execution |
+| pay-method: CC_VISA | PASS | payment + webhook verified |
+| pay-method: DANA | PASS | e-wallet simulate success |
+| pay-method: BCA_VA | PASS | VA parameter passing verified |
+| pay-method: OVO | PASS | phone field required, verified |
+| pay-method: APPLEPAY | MANUAL | requires real device — integrator to self-test |
+| refund-success | PASS | refund initiated (via DANA, not card — K024) |
+| refund-inquiry | PASS | status correct |
+| refund-webhook | PASS | local status updated |
+| subscription-create | PASS | checkout URL + local record |
+| ... | ... | ... |
+
+## Parameter Check
+
+- [x] `orderDescription`: specific description
+- [x] `goodsName` / `goodsUrl` or `appName`: provided
+- [x] `userEmail`: valid format, no "test"
+- [x] `userTerminal`: matches actual terminal
+- [x] Time fields: ISO 8601 UTC+0
+
+## Data Integrity Check
+
+- [x] Idempotency key persisted before API call
+- [x] `acquiringOrderID` stored
+- [x] `refundRequestId` returned and persisted
+- [x] Redirect URLs (success + failed + cancel)
+
+## Risk Items
+
+- [x] `WaffoUnknownStatusError` handling: retry + no close + inquiry
+- [x] Webhook duplicate push protection: idempotency check
+- [x] Concurrency safety: row-level lock
+- [x] Amount precision: decimal library used
+
+## Passive Verification (Code Review) — 15 items
+
+| Case | Description | Result | Evidence |
+|------|------------|--------|----------|
+| Payment 1.3 | C0005 channel rejection | COVERED | `file:line` |
+| Payment 1.4 | A0011 idempotency | COVERED | uuid per request |
+| Payment 1.5 | C0001 system unavailable | COVERED | `file:line` |
+| Payment 1.6 | E0001 unknown status | COVERED | `file:line` |
+| Payment 3.3 | webhook sig failure | COVERED | SDK auto-reject |
+| Payment 4.2 | cancel channel rejection | PARTIAL | no user message |
+| ... | ... | ... | ... |
+| Subscription 3.5 | sub webhook sig fail | COVERED | SDK auto-reject |
+| ... | ... | ... | ... |
+
+**Summary**: 13 COVERED / 1 PARTIAL / 1 MISSING
+
+## Pay Method Coverage
+
+| Method | Country | Type | Status | Reason |
+|--------|---------|------|--------|--------|
+| CC_VISA | - | CARD | TESTED | card representative |
+| DANA | ID | EWALLET | TESTED | ID e-wallet representative |
+| BCA_VA | ID | VA | TESTED | VA representative |
+| OVO | ID | SPECIAL | TESTED | special params (phone) |
+| GCASH | PH | EWALLET | TESTED | app-class representative |
+| MASTERCARD | - | CARD | SKIPPED | card already covered by VISA |
+| SHOPEEPAY | ID | EWALLET | SKIPPED | ID e-wallet covered by DANA |
+| APPLEPAY | - | DEVICE_PAY | MANUAL | requires real device |
+| GOOGLEPAY | - | DEVICE_PAY | MANUAL | requires real device |
+
+## Checklist
+
+| # | Check | Result |
+|---|-------|--------|
+| C1 | All applicable tests executed | PASS |
+| C2 | Pay method coverage (minimum test set) | PASS |
+| C3 | Business logic verified | PASS |
+| C4 | Redirect URLs verified | PASS |
+| C5 | Passive verification code review | PARTIAL (1 MISSING) |
+
+## Verdict: **CONDITIONAL**
+
+## Next Actions (Pre-Go-Live)
+
+- [ ] If WeChat Pay: provide production domain to Waffo for registration
+- [ ] If Google Pay: apply for API access before production
+- [ ] If Apple Pay + iframe: Apple Pay cannot be used inside iframe
+- [ ] Merchant timeout: >= 8s minimum, 15s recommended
+- [ ] DNS cache time: 60s (Waffo multi-gateway disaster recovery)
+- [ ] If server in mainland China: latency risk, consider SDWAN/VPN
+
+## Fixes Applied During Testing
+
+> Only present if Loop Mode applied fixes during test execution.
+
+| # | Test Item | Attempt | Root Cause | Fix |
+|---|-----------|---------|------------|-----|
+| 1 | {test-item} | N→N+1 | {description} | `file:line` — {what changed} |
+
+**Total**: {N} fixes, {M} unresolved
+
+## Remediation
+
+- {item that needs fixing before go-live}
 ```
 
 **Verdict rules:**

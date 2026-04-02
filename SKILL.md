@@ -499,7 +499,7 @@ Test: payment-success
 
 Before generating any test, read these reference files:
 - `references/business-validation.md` — code check list (§1), business questions (§2), competitor reference (§3), passive verification checklist (§4), acceptance report template (§5)
-- `references/sandbox-knowledge.md` — Sandbox-specific quirks: credit card refund webhook limitation (K024), subscription renewal simulation (K018), checkout selectors (K026), response format (K023), rate limiting (K027), exception trigger amounts
+- `references/sandbox-knowledge.md` — Sandbox-specific quirks: refund must use e-wallet not card (K024), subscription renewal simulation (K018), checkout selectors (K026), response format (K023), rate limiting (K027), disable project rate limiting before test (K028), exception trigger amounts
 
 ### Context Discovery (MANDATORY first step)
 
