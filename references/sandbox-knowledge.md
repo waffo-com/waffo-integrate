@@ -53,7 +53,7 @@ This file is loaded during **Step 7** test execution only. Contains Sandbox-spec
 - Missing or wrong Content-Type header
 - Returning HTML or plain text instead of JSON
 
-**Note**: When using the SDK's `HandleWebhook()` method, the response is automatically formatted correctly. This is only a concern for custom webhook implementations.
+**Note**: The SDK's `HandleWebhook()` generates the correct JSON response body, but does NOT set the `Content-Type` header — that is the web framework's responsibility. Most frameworks default to `text/plain` for string responses (Gin `c.String()`, Express `res.send()`, Spring `ResponseEntity.ok().body()`). The integration code must explicitly set `Content-Type: application/json`. Step 7 checklist C5 verifies this.
 
 ---
 

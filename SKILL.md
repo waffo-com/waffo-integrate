@@ -707,9 +707,10 @@ After all test items are executed, evaluate:
 | C2 | Pay method coverage | **Minimum test set** all tested? Skipped methods documented with reason? APPLEPAY/GOOGLEPAY marked MANUAL? |
 | C3 | Business logic verified | Was the project's actual behavior checked (not just API response)? |
 | C4 | Redirect URLs verified | Were success/failure redirect URLs asserted from checkout result page? |
+| C5 | Webhook Content-Type | Webhook response sets `Content-Type: application/json`? SDK only generates responseBody — the web framework default is usually `text/plain`. Check the actual response header during active tests (e.g., inspect webhook call logs or curl the endpoint). If wrong → `FIXABLE_CODE`, apply Loop Mode fix. |
 
 **Verdict:**
-- All C1-C4 PASS → **FULL**
+- All C1-C5 PASS → **FULL**
 - Any PARTIAL → **CONDITIONAL** (list remediation steps)
 - Any FAIL → **INCOMPLETE** (list what failed and why)
 
@@ -722,6 +723,7 @@ For each passive verification item:
 1. **Read** the relevant code section (error handler, webhook signature check, request ID generation, etc.)
 2. **Check** if the exception handling branch exists and implements the correct strategy
 3. **Record** result: `COVERED` / `MISSING` / `PARTIAL` with the code file and line reference
+4. **If MISSING or PARTIAL → apply Loop Mode fix** — these are `FIXABLE_CODE` defects, same as active test failures. Diagnose → edit fix → rebuild → re-verify. Do NOT just record and move on. Max 3 fix attempts per item, same as active Loop Mode rules.
 
 Example:
 ```
@@ -730,9 +732,11 @@ Passive Verification (Code Review):
   Payment 1.4 (A0011 idempotency)        : COVERED  — paymentRequestId uses uuid per request
   Payment 3.3 (webhook signature failure) : COVERED  — SDK HandleWebhook auto-rejects
   Subscription 1.8 (Unknown Status)       : MISSING  — no WaffoUnknownStatusError handler
+    → Fix applied: added catch branch in service/waffo_subscription.go:89
+    → Re-verified: COVERED ✓
 ```
 
-Include the full Code Review results in the verification report under "Passive Verification" section.
+Include the full Code Review results in the verification report under "Passive Verification" section. Fixed items should show both the original finding and the fix applied.
 
 ### Verification Report
 
