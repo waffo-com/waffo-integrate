@@ -773,4 +773,4 @@ Generate report per `references/acceptance-criteria.md` §4 template. Include:
 - Failed items with details
 - Skipped items with reasons
 
-Print to console AND save to `integration-report-{YYYYMMDD}.txt` in project root.
+Print to console AND save to `integration-report-{YYYYMMDD}.md` in project root.
