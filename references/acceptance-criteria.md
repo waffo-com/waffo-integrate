@@ -345,8 +345,7 @@ Output the report in Markdown format:
 | DNS cache TTL (Q2) | ✓ OK | 60s |
 | Server region (Q3) | ✓ OK | Singapore |
 | WeChat Pay domain (Q4) | N/A | Not integrated |
-| Google Pay API access (Q5) | N/A | Not integrated |
-| Apple Pay + iframe (Q6) | N/A | Not integrated |
+| Apple Pay + iframe (Q5) | N/A | Not integrated |
 
 ## Fixes Applied During Testing
 

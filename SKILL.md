@@ -540,8 +540,7 @@ Before generating any test, read the project's code to understand:
    | Q2 | "DNS cache TTL 是多少？" | > 60s → Waffo 多网关灾备切换时 DNS 不生效 |
    | Q3 | "服务器部署在哪个地区？" | 大陆 → 跨境延迟风险，建议 SDWAN/VPN/专线 |
    | Q4 | "有集成 WeChat Pay 吗？" | 有 → 上线前需提供生产域名给 Waffo 做渠道注册 |
-   | Q5 | "有集成 Google Pay 吗？" | 有 → 上线前需申请 Google Pay API access |
-   | Q6 | "有集成 Apple Pay 吗？checkout 页面是否在 iframe 里？" | Apple Pay + iframe → BLOCK，Apple Pay 不支持 iframe 内调用 |
+   | Q5 | "有集成 Apple Pay 吗？checkout 页面是否在 iframe 里？" | Apple Pay + iframe → BLOCK，Apple Pay 不支持 iframe 内调用 |
 
    Record answers for the report. If developer doesn't know (e.g., timeout), try to find the value in project code (HTTP client config, DNS resolver config).
 
@@ -559,7 +558,7 @@ Context Discovery:
   Credentials:       Found in database options (Sandbox)
   Features:          Order Create + Webhook (no Cancel/Refund/Subscription)
   Applicable tests:  order-create, payment-success, payment-failure, order-create-error, webhook-idempotency, pay-method-coverage
-  Go-Live:           Q1=15s ✓, Q2=60s ✓, Q3=Singapore ✓, Q4=N/A, Q5=N/A, Q6=N/A
+  Go-Live:           Q1=15s ✓, Q2=60s ✓, Q3=Singapore ✓, Q4=N/A, Q5=N/A
 ```
 
 ### Prerequisites
