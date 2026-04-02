@@ -389,10 +389,15 @@ Phase A — Core Tests (~15 tool calls):
   → order-create-error → webhook-idempotency
   ✓ Checkpoint: output Phase A results
 
-Phase B — Pay Method Coverage (sequential batch in main session):
+Phase B1 — Card Payment Coverage (~6 tool calls):
   payMethodConfig().inquiry() → build minimum test set (§Pay Method Discovery)
-  → create orders via curl → pay each sequentially via browser_run_code
-  ✓ Checkpoint: output Phase B results
+  → card methods: create orders via curl → pay via browser_run_code with test cards
+  ✓ Checkpoint: output Phase B1 results
+
+Phase B2 — Non-Card Payment Coverage (~10 tool calls):
+  e-wallet / VA / OTC / special-params methods from minimum test set
+  → create orders via curl → Playwright opens checkout → click simulate button
+  ✓ Checkpoint: output Phase B2 results
 
 Phase C1 — Refund (~10 tool calls):
   refund-success → refund-inquiry → refund-webhook
@@ -408,11 +413,12 @@ Phase D — Passive Verification + Report (~5 tool calls):
 ```
 
 - Phase A MUST complete in the current session
-- Phase B runs sequentially in main session (see Browser Conflict Warning below)
+- Phase B1 runs sequentially in main session (card payments via browser_run_code)
+- Phase B2 runs sequentially in main session (non-card payments via simulate buttons)
 - Phase C1 may continue in same session or handoff to new session if context is low
 - Phase C2 may continue in same session or handoff to new session if context is low
-- **Phase D is BLOCKED until Phase A + B + C1 + C2 are ALL complete** — do NOT generate the report while any phase is still running or has pending background agents. If a background agent was dispatched, you MUST wait for its completion notification before starting Phase D.
-- **Execution order is strict**: A → B → C1 → C2 → D. Do NOT start a later phase while an earlier phase has unfinished work (including background agents). The only exception: C1 API-only tests (curl) may run while Phase B browser tests execute, but Phase D report MUST wait for all.
+- **Phase D is BLOCKED until ALL prior phases are complete** — do NOT generate the report while any phase is still running or has pending background agents.
+- **Execution order is strict**: A → B1 → B2 → C1 → C2 → D. The only exception: C1 API-only tests (curl) may run while B2 browser tests execute, but Phase D report MUST wait for all.
 
 ### Browser Conflict Warning (CRITICAL)
 
@@ -420,7 +426,7 @@ Phase D — Passive Verification + Report (~5 tool calls):
 
 **Rules:**
 - **NEVER** dispatch regular (non-isolated) subagents to run Playwright tests
-- Phase B card brand tests MUST use one of these two strategies:
+- Phase B1/B2 payment tests MUST use one of these two strategies:
 
 #### Strategy 1: Sequential Batch in Main Session (DEFAULT — recommended)
 
@@ -432,16 +438,16 @@ Run all card brand payments sequentially in the main session using `browser_run_
    a. browser_navigate to checkout URL
    b. browser_run_code: fill card + submit + wait for result
    c. Verify result (screenshot or text check)
-3. Collect all results, output Phase B summary
+3. Collect all results, output Phase B1/B2 summary
 ```
 
 #### Strategy 2: Isolated Agents (when context budget is tight)
 
-If context is running low and you need to offload Phase B, dispatch agents with `isolation: "worktree"` — but note they still share the Playwright browser. To truly isolate:
+If context is running low and you need to offload Phase B1/B2, dispatch agents with `isolation: "worktree"` — but note they still share the Playwright browser. To truly isolate:
 
 1. **Main session finishes ALL Playwright work first** (Phase A payment tests)
 2. **Main session stops using Playwright** (no more browser calls)
-3. **Then** dispatch a single agent (not parallel) to run Phase B card tests
+3. **Then** dispatch a single agent (not parallel) to run Phase B1/B2 tests
 4. Wait for agent to complete before resuming Playwright in main session
 
 **NEVER run Playwright in main session and an agent simultaneously.**
