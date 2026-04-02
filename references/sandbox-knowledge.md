@@ -91,3 +91,50 @@ Use specific amounts to trigger exception scenarios in Sandbox:
 **Usage**: When testing exception handling (active-exception test cases 1.6, 4.5, 5.6, 1.8, 5.7), create an order with these specific amounts to reliably trigger the corresponding error.
 
 **Note**: These amounts work for both payment and subscription create. The error is returned in the API response, not via webhook.
+
+---
+
+## K029: payMethodType Limits Checkout Available Methods
+
+**Symptom**: Merchant has DANA, OVO, QRIS contracted (visible in `payMethodConfig().inquiry()`), but checkout page only shows card payment options.
+
+**Root Cause**: Project code hardcodes `payMethodType: "CREDITCARD,DEBITCARD"` in order/subscription create request. The checkout page only displays methods matching the `payMethodType` passed in the create call.
+
+**Impact on Testing**: Phase B pay-method-coverage may select DANA as the e-wallet representative, but if the project hardcodes card-only `payMethodType`, DANA won't appear on checkout and the test will fail — not because of a Sandbox issue, but because the project code restricts it.
+
+**Pre-flight Check**: During Context Discovery, cross-compare:
+1. `payMethodConfig().inquiry()` result → what the merchant **can** use
+2. Project code's `payMethodType` / `payMethodName` in create calls → what checkout **will show**
+
+Output the intersection as "checkout-available methods". Only include methods in the minimum test set if they are checkout-available. Flag mismatches as a finding in the report:
+```
+⚠ DANA contracted but not checkout-available — project hardcodes payMethodType="CREDITCARD,DEBITCARD"
+```
+
+---
+
+## K030: Subscription Management Page DOM Structure
+
+**Symptom**: K018 says "click the 'Next period payment success' button" but doesn't provide selector details, causing agents to waste tool calls on snapshot exploration.
+
+**Page Structure** (Sandbox management page with `mock=true`):
+
+Key elements:
+- **"Next period payment success"** button — triggers `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION` with success. Note: button text may include trailing comma ("Next period payment success,")
+- **"Next period payment failed,"** button — triggers period changed notification with failure
+- **"Cancel Subscription"** button — triggers `SUBSCRIPTION_STATUS_NOTIFICATION` with CLOSE status
+- **Billing History** section — shows past period payment records
+
+**Recommended selectors**:
+```js
+// Renewal success
+await page.getByRole('button', { name: /next period payment success/i }).click();
+
+// Renewal failure
+await page.getByRole('button', { name: /next period payment failed/i }).click();
+
+// Cancel
+await page.getByRole('button', { name: /cancel subscription/i }).click();
+```
+
+**Note**: Always use case-insensitive regex matchers to handle trailing punctuation and case variations. After clicking, wait 3-5s for webhook delivery before verifying.

@@ -51,16 +51,20 @@ const nameField = page.getByRole('textbox', { name: /cardholder/i });
 await nameField.click();
 await nameField.pressSequentially('TEST USER', { delay: 30 });
 
-// Submit
-await page.getByRole('button', { name: 'Pay' }).click();
+// Submit — use testid to avoid strict mode conflict (Google Pay / Apple Pay buttons also match "Pay")
+await page.getByTestId('pay').getByRole('button', { name: 'Pay' }).click();
 
-// Wait for result (success or failure page)
-await page.locator('h1:has-text("Payment Successful"), h1:has-text("Payment Failed")')
-  .first().waitFor({ state: 'visible', timeout: 30000 });
+// Wait for result — failure scenario shows "Processing" heading for 5-8s before final result
+// Poll until heading is no longer "Processing" (max 60s)
+const startTime = Date.now();
+let heading = '';
+while (Date.now() - startTime < 60000) {
+  heading = await page.locator('h1').first().textContent() || '';
+  if (heading && !heading.includes('Processing')) break;
+  await new Promise(r => setTimeout(r, 2000));
+}
 
-// Extract result
-const heading = await page.locator('h1').first().textContent();
-const confirmLink = await page.locator('a:has-text("Confirm")').getAttribute('href');
+const confirmLink = await page.locator('a:has-text("Confirm")').getAttribute('href').catch(() => null);
 const isSuccess = heading.includes('Successful');
 
 return JSON.stringify({ success: isSuccess, heading, redirectUrl: confirmLink });
@@ -68,7 +72,64 @@ return JSON.stringify({ success: isSuccess, heading, redirectUrl: confirmLink })
 
 **Usage**: Navigate to checkout URL first (`browser_navigate`), then run this code via `browser_run_code`. Parse the returned JSON to determine PASS/FAIL.
 
-**For subscription checkout**: The same batch script works — subscription checkout pages use the same card form structure.
+### Subscription Batch Mode (1 tool call per subscription payment)
+
+Subscription checkout has a **different flow** from one-time payment: payment method tabs → select card brand → click Pay → fill card → click Subscribe. The result page heading is "Subscription successful" (lowercase s), not "Payment Successful".
+
+```js
+// Parameters: cardNumber
+const cardNumber = '{{CARD_NUMBER}}';
+
+// Step 1: Select payment method tab (Credit/Debit Card)
+const cardTab = page.locator('[data-testid="payment-method-card"], :text("Credit"), :text("Debit")').first();
+if (await cardTab.isVisible()) {
+  await cardTab.click();
+  await new Promise(r => setTimeout(r, 1000));
+}
+
+// Step 2: Click Pay button to proceed to card form
+await page.getByTestId('pay').getByRole('button', { name: 'Pay' }).click();
+await new Promise(r => setTimeout(r, 2000));
+
+// Step 3: Fill card details
+const cardField = page.locator('input[autocomplete="cc-number"], [placeholder*="1234"]').first();
+await cardField.click();
+await cardField.pressSequentially(cardNumber, { delay: 50 });
+
+const expiryField = page.locator('input[autocomplete="cc-exp"], [placeholder*="mm"]').first();
+await expiryField.click();
+await expiryField.pressSequentially('1229', { delay: 50 });
+
+const cvvField = page.locator('input[autocomplete="cc-csc"], [placeholder*="CVV"]').first();
+await cvvField.click();
+await cvvField.pressSequentially('123', { delay: 50 });
+
+const nameField = page.getByRole('textbox', { name: /cardholder/i });
+await nameField.click();
+await nameField.pressSequentially('TEST USER', { delay: 30 });
+
+// Step 4: Click Subscribe
+await page.getByRole('button', { name: /subscribe/i }).click();
+
+// Step 5: Wait for result — poll until heading is not "Processing"
+const startTime = Date.now();
+let heading = '';
+while (Date.now() - startTime < 60000) {
+  heading = await page.locator('h1').first().textContent() || '';
+  if (heading && !heading.includes('Processing')) break;
+  await new Promise(r => setTimeout(r, 2000));
+}
+
+const confirmLink = await page.locator('a:has-text("Confirm")').getAttribute('href').catch(() => null);
+const isSuccess = heading.toLowerCase().includes('successful');
+
+return JSON.stringify({ success: isSuccess, heading, redirectUrl: confirmLink });
+```
+
+**Important differences from one-time payment:**
+- Subscription checkout requires selecting payment method tab first, then clicking Pay to reach the card form
+- Final submit button is "Subscribe", not "Pay"
+- Success heading is "Subscription successful" (lowercase s)
 
 ### Step-by-Step Mode (FALLBACK — when batch mode fails)
 

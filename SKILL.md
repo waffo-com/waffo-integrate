@@ -282,7 +282,14 @@ internal/waffo/waffo_test.go  # Tests
 
 2. **Error types**:
    - `WaffoError` — client-side errors (validation, config)
-   - `WaffoUnknownStatusError` — network errors on write operations (create, refund, cancel). The operation may or may not have succeeded. The developer must query status to confirm.
+   - `WaffoUnknownStatusError` — network errors on **all write operations**. The operation may or may not have succeeded. The developer must query status to confirm. **Every write operation must have a `WaffoUnknownStatusError` catch branch** — the full list:
+     - `order().create()` — query via `order().inquiry()`
+     - `order().refund()` — query via `refund().inquiry()`
+     - `order().cancel()` — query via `order().inquiry()`
+     - `subscription().create()` — query via `subscription().inquiry()`
+     - `subscription().cancel()` — query via `subscription().inquiry()`
+     - `subscription().change()` — query via `subscription().changeInquiry()`
+     - `order().capture()` — query via `order().inquiry()`
 
 3. **Timestamp auto-injection**: The SDK automatically injects `requestedAt` / `orderRequestedAt` if not provided. No need to set these manually.
 
@@ -512,7 +519,7 @@ Test: payment-success
 
 Before generating any test, read these reference files:
 - `references/business-validation.md` — code check list (§1), business questions (§2), competitor reference (§3), passive verification checklist (§4), acceptance report template (§5)
-- `references/sandbox-knowledge.md` — Sandbox-specific quirks: refund must use e-wallet not card (K024), subscription renewal simulation (K018), checkout selectors (K026), response format (K023), rate limiting (K027), disable project rate limiting before test (K028), exception trigger amounts
+- `references/sandbox-knowledge.md` — Sandbox-specific quirks: refund must use e-wallet not card (K024), subscription renewal simulation (K018), checkout selectors (K026), response format (K023), rate limiting (K027), disable project rate limiting before test (K028), payMethodType limits checkout (K029), subscription management page DOM (K030), exception trigger amounts
 
 ### Context Discovery (MANDATORY first step)
 
@@ -524,6 +531,7 @@ Before generating any test, read the project's code to understand:
 4. **Pay methods**: Call `payMethodConfig().inquiry()` using the project's SDK credentials to get the **actual contracted pay methods** (source of truth). Filter `currentStatus == "1"` only. Then apply the pay method simplification rules (§Pay Method Discovery) to build the minimum test set.
 5. **Credentials**: Check env vars, config files, database options for Sandbox credentials
 6. **Feature scope**: Determine which features are integrated → map to applicable test items
+7. **payMethodType cross-check** (K029): Read project code to find what `payMethodType` / `payMethodName` values are passed in order/subscription create calls. Cross-compare with step 4's contracted list to produce the **checkout-available** methods. Only methods that are both contracted AND passed in `payMethodType` will appear on the checkout page. Flag mismatches in the summary.
 
 Output a summary before proceeding:
 ```
@@ -532,7 +540,10 @@ Context Discovery:
   Webhook endpoint:  POST /api/waffo/webhook (no auth, signature verified)
   Business logic:    Webhook success → RechargeWaffo() → add balance
   Pay methods (API): 12 contracted (8 active) — see minimum test set below
-  Minimum test set:  CC_VISA, DANA, BCA_VA, OVO, PIX (5 methods, per simplification rules)
+  payMethodType in code: "CREDITCARD,DEBITCARD" (hardcoded in order create)
+  Checkout-available: CC_VISA, CC_MASTER, DC_VISA, DC_MASTER (card only)
+  ⚠ Mismatch: DANA, OVO, QRIS contracted but NOT checkout-available
+  Minimum test set:  CC_VISA (card representative) — other types blocked by payMethodType
   Credentials:       Found in database options (Sandbox)
   Features:          Order Create + Webhook (no Cancel/Refund/Subscription)
   Applicable tests:  order-create, payment-success, payment-failure, order-create-error, webhook-idempotency, pay-method-coverage
