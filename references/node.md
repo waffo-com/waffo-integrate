@@ -410,6 +410,7 @@ router.post('/waffo/webhook',
     const webhookResult = await handler.handleWebhook(body, signature);
 
     res.setHeader('X-SIGNATURE', webhookResult.responseSignature);
+    res.setHeader('Content-Type', 'application/json');
     res.status(200).send(webhookResult.responseBody);
   }
 );
@@ -455,6 +456,7 @@ export class WaffoWebhookController {
     const result = await handler.handleWebhook(body, signature);
 
     res.setHeader('X-SIGNATURE', result.responseSignature);
+    res.setHeader('Content-Type', 'application/json');
     res.status(200).send(result.responseBody);
   }
 }
@@ -498,6 +500,7 @@ export async function waffoWebhookRoute(fastify: FastifyInstance) {
     const result = await handler.handleWebhook(body, signature);
 
     reply.header('X-SIGNATURE', result.responseSignature);
+    reply.header('Content-Type', 'application/json');
     reply.status(200).send(result.responseBody);
   });
 }

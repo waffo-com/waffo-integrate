@@ -295,7 +295,7 @@ internal/waffo/waffo_test.go  # Tests
 
 4. **merchantId auto-injection**: The SDK automatically adds `merchantId` to all requests from config.
 
-5. **Webhook response**: The webhook handler returns a signed response. The developer must set `X-SIGNATURE` header and return `responseBody` as-is. Do not modify the response body.
+5. **Webhook response**: The webhook handler returns a signed response. The developer must set three things: (1) `X-SIGNATURE` header from `webhookResult.responseSignature`, (2) `Content-Type: application/json` header (SDK does not set this automatically — the framework default is usually `text/plain`), (3) return `responseBody` as-is. Do not modify the response body.
 
 6. **Webhook business logic pattern**: The webhook handler must NOT be left as TODO placeholders. **Every registered notification handler** must implement the three-stage pattern:
    - **Stage 1 — Idempotency check**: Query the local order/subscription by its ID. If already in terminal status (success/failed/cancelled), skip processing and return success response.

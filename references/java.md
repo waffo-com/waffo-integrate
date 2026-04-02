@@ -492,6 +492,7 @@ public class WaffoWebhookController {
 
         return ResponseEntity.ok()
                 .header("X-SIGNATURE", webhookResult.getResponseSignature())
+                .header("Content-Type", "application/json")
                 .body(webhookResult.getResponseBody());
     }
 }

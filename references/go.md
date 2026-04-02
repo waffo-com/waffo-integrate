@@ -540,6 +540,7 @@ func WebhookHandler() gin.HandlerFunc {
 		webhookResult := handler.HandleWebhook(string(body), signature)
 
 		c.Header("X-SIGNATURE", webhookResult.ResponseSignature)
+		c.Header("Content-Type", "application/json")
 		c.String(http.StatusOK, webhookResult.ResponseBody)
 	}
 }
@@ -584,6 +585,7 @@ func WebhookEchoHandler(c echo.Context) error {
 	webhookResult := handler.HandleWebhook(string(body), signature)
 
 	c.Response().Header().Set("X-SIGNATURE", webhookResult.ResponseSignature)
+	c.Response().Header().Set("Content-Type", "application/json")
 	return c.String(http.StatusOK, webhookResult.ResponseBody)
 }
 ```
@@ -621,6 +623,7 @@ func WebhookFiberHandler(c *fiber.Ctx) error {
 	webhookResult := handler.HandleWebhook(body, signature)
 
 	c.Set("X-SIGNATURE", webhookResult.ResponseSignature)
+	c.Set("Content-Type", "application/json")
 	return c.SendString(webhookResult.ResponseBody)
 }
 ```
