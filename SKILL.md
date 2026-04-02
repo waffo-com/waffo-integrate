@@ -124,8 +124,11 @@ After feature selection, ask these questions — their answers affect code gener
    - Yes → generate refund-related code for subscriptions
    - No → skip subscription refund code
 
-5. **Pricing currency**: "Where does the pricing currency come from? Do different countries use different currencies?"
-   - Note: When integrating Japan local payment methods, currency must be `JPY` or `USD`. Global card payments have no currency restriction.
+5. **Pricing currency**: "Is your pricing single-currency (e.g., always USD) or multi-currency (different currencies based on user's country)?"
+   - **Single-currency** → hardcode `orderCurrency` / `currency` in code (e.g., `"USD"`)
+   - **Multi-currency** → `orderCurrency` / `currency` must be a parameter passed by the caller, NOT hardcoded. Generate code that accepts currency as input.
+   - Follow-up: "Which currencies do you need to support?" (for test coverage in Step 7)
+   - Note: Waffo checkout automatically displays payment methods available for the given currency — the skill does NOT need to map currency → payment methods.
 
 6. **iframe checkout** *(if applicable)*: "Will you load Waffo checkout page inside an iframe?"
    - Yes → additional frontend config needed: `referrer-policy`, `allow="payment"`, responsive width
@@ -363,6 +366,8 @@ internal/waffo/waffo_test.go  # Tests
 
 29. **Redirect URL format**: Redirect URLs (`successRedirectUrl`, `failedRedirectUrl`, `cancelRedirectUrl`) support both HTTPS links and deeplinks (e.g., `komoe://payment/result`). Both formats are valid.
 
+30. **Currency parameterization**: If the developer answered "multi-currency" in Step 3 Q5, `orderCurrency` (for orders) and `currency` (for subscriptions) MUST be function parameters, NOT hardcoded values. Waffo checkout automatically displays payment methods available for the given currency — the code does not need to handle currency→payment-method mapping.
+
 ---
 
 ## Step 7: Integration Verification
@@ -590,6 +595,12 @@ Read `references/acceptance-criteria.md` for the full criteria definitions. The 
 | refund-success | Project refund endpoint → refund succeeds → order status updated |
 | refund-inquiry | Project refund query endpoint → returns correct refund status |
 | refund-webhook | Refund notification arrives → project updates order status |
+
+**Multi-currency (if developer answered "multi-currency" in Step 3 Q5):**
+
+| Test Item | What to verify |
+|-----------|----------------|
+| currency-coverage | For each currency the developer listed: create an order with that currency → verify checkout page loads and displays appropriate payment methods. At minimum test the primary currency + one secondary currency. |
 
 **Subscription — basic (if integrated):**
 
