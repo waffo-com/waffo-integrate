@@ -727,15 +727,18 @@ After all test items are executed, evaluate:
 | C3 | Business logic verified | Was the project's actual behavior checked (not just API response)? |
 | C4 | Redirect URLs verified | Were success/failure redirect URLs asserted from checkout result page? |
 | C5 | Webhook Content-Type | Webhook response sets `Content-Type: application/json`? SDK only generates responseBody — the web framework default is usually `text/plain`. Check the actual response header during active tests (e.g., inspect webhook call logs or curl the endpoint). If wrong → `FIXABLE_CODE`, apply Loop Mode fix. |
+| C6 | Parameter quality | During active tests, inspect API request parameters: (1) `orderDescription` is specific, not "test" placeholder; (2) `goodsName`/`goodsUrl` or `appName` provided; (3) `userEmail` format valid, no "test" in address; (4) `userTerminal` matches actual terminal type (WEB/APP). If any wrong → `FIXABLE_CODE`. |
+| C7 | Data persistence | After payment-success: verify `acquiringOrderID` stored in project database. After refund-success (if applicable): verify `refundRequestId` returned to caller and persisted. These IDs are required for webhook matching and inquiry operations. |
+| C8 | orderExpiredAt format | Only if project sets custom checkout expiry: verify `orderExpiredAt` is ISO 8601 UTC+0 format ending with `Z`, and value is in the future. Skip if default expiry (4h). |
 
 **Verdict:**
-- All C1-C5 PASS → **FULL**
+- All C1-C8 PASS → **FULL**
 - Any PARTIAL → **CONDITIONAL** (list remediation steps)
 - Any FAIL → **INCOMPLETE** (list what failed and why)
 
 ### Code Review — Passive Verification (MANDATORY after active tests)
 
-After all active tests complete, perform a code review against the passive verification checklist in `references/business-validation.md` §4. This covers 15 exception handling scenarios (8 payment + 7 subscription) that are verified by reading code, not by running tests.
+After all active tests complete, perform a code review against the passive verification checklist in `references/business-validation.md` §4. This covers 21 items: 11 payment exception scenarios, 8 subscription exception scenarios, and 2 data safety checks (time format + idempotency key persist order) — all verified by reading code, not by running tests.
 
 For each passive verification item:
 

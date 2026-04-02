@@ -95,6 +95,13 @@ Before generating Waffo integration code, search the project for existing paymen
 | 5.6 | Cancel system unavailable | Cancel error handler shows user-friendly message |
 | 5.7 | Cancel Unknown | Cancel WaffoUnknownStatusError handler: no close → inquiry |
 
+### Passive Verification Checklist — Data Safety (2 items)
+
+| ID | Description | Code Review Check Point |
+|----|-----------|----------------------|
+| D1 | Time field format | All time fields (`orderRequestedAt`, `userCreatedAt`, etc.) use ISO 8601 UTC+0 format ending with `Z`, milliseconds <= 3 digits. Check the formatting function/library used. |
+| D2 | Idempotency key persist-before-call | `paymentRequestId` / `refundRequestId` / `subscriptionRequest` is inserted into the database BEFORE the API call, not after. If the API call succeeds but the response is lost (network timeout), the ID must already be persisted to allow inquiry recovery. |
+
 ---
 
 ## §5 Integration Acceptance Report Template

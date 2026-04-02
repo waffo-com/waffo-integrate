@@ -293,7 +293,7 @@ Output the report in Markdown format:
 - [x] Concurrency safety: row-level lock
 - [x] Amount precision: decimal library used
 
-## Passive Verification (Code Review) — 15 items
+## Passive Verification (Code Review) — 21 items
 
 | Case | Description | Result | Evidence |
 |------|------------|--------|----------|
@@ -307,7 +307,7 @@ Output the report in Markdown format:
 | Subscription 3.5 | sub webhook sig fail | COVERED | SDK auto-reject |
 | ... | ... | ... | ... |
 
-**Summary**: 13 COVERED / 1 PARTIAL / 1 MISSING
+**Summary**: 19 COVERED / 1 PARTIAL / 1 MISSING
 
 ## Pay Method Coverage
 
@@ -331,7 +331,10 @@ Output the report in Markdown format:
 | C2 | Pay method coverage (cross-checked against API) | PASS |
 | C3 | Business logic verified | PASS |
 | C4 | Redirect URLs verified | PASS |
-| C5 | Passive verification code review | PARTIAL (1 MISSING) |
+| C5 | Webhook Content-Type application/json | PASS |
+| C6 | Parameter quality (orderDescription, goodsName, userEmail, userTerminal) | PASS |
+| C7 | Data persistence (acquiringOrderID, refundRequestId stored) | PASS |
+| C8 | orderExpiredAt format (if custom expiry) | N/A |
 
 ## Verdict: **CONDITIONAL**
 
@@ -449,4 +452,4 @@ Source: Merchant Integration Test Cases v1.3 + Subscription Test Cases v2.2
 **Verification method definitions:**
 - **Active (33 items)**: Normal scenarios — write test code, execute automatically
 - **Active Exception (5 items)**: Unknown Status (E0001) — write test code using specific Sandbox amounts to trigger. Reason: complex handling (retry → no close → inquiry → wait for webhook), Sandbox can reliably reproduce, mishandling has severe consequences (user paid but no benefit granted)
-- **Passive (15 items)**: Channel rejection / signature failure / idempotency conflict — no test code. Verified through code review confirming exception handling exists. If unexpectedly triggered during testing → that item fails
+- **Passive (21 items)**: Channel rejection / signature failure / idempotency conflict / data safety — no test code. Verified through code review confirming exception handling exists. If unexpectedly triggered during testing → that item fails
