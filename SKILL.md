@@ -364,6 +364,8 @@ internal/waffo/waffo_test.go  # Tests
 
 30. **Currency parameterization**: If the developer answered "multi-currency" in Step 3 Q5, `orderCurrency` (for orders) and `currency` (for subscriptions) MUST be function parameters, NOT hardcoded values. Waffo checkout automatically displays payment methods available for the given currency — the code does not need to handle currency→payment-method mapping.
 
+31. **Refund currency must match order currency**: The refund `orderCurrency` and `orderAmount` must use the **original order's currency**, not the project's internal accounting currency. For example, if a user paid in IDR, the refund must also be in IDR — even if the project internally tracks revenue in USD.
+
 ---
 
 ## Step 7: Integration Verification
