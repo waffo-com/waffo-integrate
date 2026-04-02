@@ -123,12 +123,12 @@ export async function cancelOrder(paymentRequestId: string) {
   return response.getData();
 }
 
-export async function captureOrder(paymentRequestId: string, amount: string, currency: string) {
+export async function captureOrder(paymentRequestId: string, merchantId: string, amount: string) {
   const waffo = getWaffo();
   const response = await waffo.order().capture({
     paymentRequestId,
+    merchantId,
     captureAmount: amount,
-    captureCurrency: currency,
   });
 
   if (!response.isSuccess()) {
@@ -149,14 +149,14 @@ import { getWaffo } from '../config/waffo';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function refundOrder(
-  origPaymentRequestId: string,
+  acquiringOrderId: string,
   refundAmount: string,
   refundReason?: string,
 ) {
   const waffo = getWaffo();
   const response = await waffo.order().refund({
     refundRequestId: uuidv4(),
-    origPaymentRequestId,
+    acquiringOrderId,
     refundAmount,
     refundReason,
   });
@@ -197,6 +197,7 @@ export interface CreateSubscriptionInput {
   notifyUrl: string;
   userId: string;
   userEmail: string;
+  userTerminal?: string;             // WEB | APP | WAP | SYSTEM (default: WEB)
   productId: string;
   productName: string;
   periodType: 'DAILY' | 'WEEKLY' | 'MONTHLY';
@@ -268,11 +269,10 @@ export async function cancelSubscription(subscriptionRequest: string) {
 /**
  * Get subscription management URL.
  * Note: manage() only works when subscription is ACTIVE (after payment).
- * Type assertion needed due to SDK type limitation.
  */
 export async function manageSubscription(subscriptionRequest: string) {
   const waffo = getWaffo();
-  const response = await waffo.subscription().manage({ subscriptionRequest } as any);
+  const response = await waffo.subscription().manage({ subscriptionRequest });
 
   if (!response.isSuccess()) {
     throw new Error(`Subscription manage failed: ${response.getCode()} - ${response.getMessage()}`);
@@ -289,6 +289,7 @@ export interface ChangeSubscriptionInput {
   notifyUrl: string;
   userId: string;
   userEmail: string;
+  userTerminal?: string;             // WEB | APP | WAP | SYSTEM (default: WEB)
   newProductName: string;
   periodType: 'DAILY' | 'WEEKLY' | 'MONTHLY';
   periodInterval: string;
@@ -355,33 +356,61 @@ router.post('/waffo/webhook',
     const handler = waffo.webhook()
       .onPayment((notification) => {
         const result = notification.result;
-        console.log(`Payment ${result?.orderStatus}: orderId=${result?.acquiringOrderId}`);
-        // TODO: Update your order status in database
+
+        // NOTE: If Subscription is also integrated, add this filter to skip subscription payments:
+        // const productName = result?.paymentInfo?.productName;
+        // if (productName === 'SUBSCRIPTION' || productName === 'MINI_PROGRAM_SUBSCRIPTION') {
+        //   // Subscription payments are handled by onSubscriptionStatus / onSubscriptionPeriodChanged
+        //   // If you need to handle failed orders during subscription billing, add logic here
+        //   return;
+        // }
+
+        // Three-stage pattern: idempotency → lock → transaction
+        // Stage 1: Find local order by paymentRequestId, skip if already terminal
+        // Stage 2: Lock the order to prevent duplicate processing
+        // Stage 3: In a DB transaction — update status + execute business logic
+        //
+        // Key fields: result.paymentRequestId, result.orderStatus, result.acquiringOrderId
+        // PAY_SUCCESS → execute business logic (e.g., add balance/quota)
+        // ORDER_CLOSE → mark order as expired/failed
+        console.log(`Payment: paymentRequestId=${result?.paymentRequestId}, orderStatus=${result?.orderStatus}, acquiringOrderId=${result?.acquiringOrderId}`);
       })
       .onRefund((notification) => {
+        // Three-stage pattern: idempotency → lock → transaction
+        // IMPORTANT: Refund notification identifies orders by acquiringOrderId (NOT paymentRequestId).
+        // You must have stored acquiringOrderId from the order create response to look up the local order.
+        // Key fields: result.acquiringOrderId, result.refundStatus, result.refundRequestId
+        // ORDER_FULLY_REFUNDED → mark order as refunded
+        // ORDER_PARTIALLY_REFUNDED → update partial refund state
         const result = notification.result;
-        console.log(`Refund ${result?.refundStatus}: refundId=${result?.acquiringRefundOrderId}`);
-        // TODO: Update your refund status in database
+        console.log(`Refund: acquiringOrderId=${result?.acquiringOrderId}, refundStatus=${result?.refundStatus}, refundRequestId=${result?.refundRequestId}`);
       })
       .onSubscriptionStatus((notification) => {
+        // Three-stage pattern: idempotency → lock → transaction
+        // Look up local record by subscriptionRequest (must have been created during subscription create)
+        // Key fields: result.subscriptionRequest, result.subscriptionStatus, result.subscriptionId
+        // ACTIVE → activate subscription / grant access
+        // MERCHANT_CANCELLED/USER_CANCELLED/EXPIRED/CLOSE → revoke access
         const result = notification.result;
-        console.log(`Subscription ${result?.subscriptionStatus}: subId=${result?.subscriptionId}`);
-        // TODO: Update your subscription status in database
+        console.log(`Subscription status: subscriptionRequest=${result?.subscriptionRequest}, status=${result?.subscriptionStatus}, subscriptionId=${result?.subscriptionId}`);
       })
       .onSubscriptionPeriodChanged((notification) => {
+        // Look up local record by subscriptionRequest
+        // Record the renewal and extend user access for the next billing period
         const result = notification.result;
-        console.log(`Period changed: subId=${result?.subscriptionId}`);
-        // TODO: Record billing period result
+        console.log(`Subscription period changed: subscriptionRequest=${result?.subscriptionRequest}, subscriptionId=${result?.subscriptionId}`);
       })
       .onSubscriptionChange((notification) => {
+        // Handle upgrade/downgrade result
+        // Key fields: result.subscriptionChangeStatus, result.originSubscriptionRequest, result.subscriptionRequest
         const result = notification.result;
-        console.log(`Subscription change ${result?.subscriptionChangeStatus}`);
-        // TODO: Handle subscription upgrade/downgrade result
+        console.log(`Subscription change: changeStatus=${result?.subscriptionChangeStatus}, subscriptionId=${result?.subscriptionId}`);
       });
 
     const webhookResult = await handler.handleWebhook(body, signature);
 
     res.setHeader('X-SIGNATURE', webhookResult.responseSignature);
+    res.setHeader('Content-Type', 'application/json');
     res.status(200).send(webhookResult.responseBody);
   }
 );
@@ -410,15 +439,24 @@ export class WaffoWebhookController {
 
     const handler = waffo.webhook()
       .onPayment((notification) => {
-        // TODO: Handle payment notification
+        const result = notification.result;
+        // NOTE: If Subscription is also integrated, add productName filter here
+        // (skip 'SUBSCRIPTION' / 'MINI_PROGRAM_SUBSCRIPTION' — see Express template above)
+        // Three-stage pattern: idempotency → lock → transaction
+        // Key fields: result.paymentRequestId, result.orderStatus, result.acquiringOrderId
+        console.log(`Payment: paymentRequestId=${result?.paymentRequestId}, orderStatus=${result?.orderStatus}`);
       })
       .onRefund((notification) => {
-        // TODO: Handle refund notification
+        // IMPORTANT: Refund identifies orders by acquiringOrderId, NOT paymentRequestId
+        // Key fields: result.acquiringOrderId, result.refundStatus, result.refundRequestId
+        const result = notification.result;
+        console.log(`Refund: acquiringOrderId=${result?.acquiringOrderId}, refundStatus=${result?.refundStatus}`);
       });
 
     const result = await handler.handleWebhook(body, signature);
 
     res.setHeader('X-SIGNATURE', result.responseSignature);
+    res.setHeader('Content-Type', 'application/json');
     res.status(200).send(result.responseBody);
   }
 }
@@ -445,15 +483,24 @@ export async function waffoWebhookRoute(fastify: FastifyInstance) {
 
     const handler = waffo.webhook()
       .onPayment((notification) => {
-        // TODO: Handle payment notification
+        const result = notification.result;
+        // NOTE: If Subscription is also integrated, add productName filter here
+        // (skip 'SUBSCRIPTION' / 'MINI_PROGRAM_SUBSCRIPTION' — see Express template above)
+        // Three-stage pattern: idempotency → lock → transaction
+        // Key fields: result.paymentRequestId, result.orderStatus, result.acquiringOrderId
+        console.log(`Payment: paymentRequestId=${result?.paymentRequestId}, orderStatus=${result?.orderStatus}`);
       })
       .onRefund((notification) => {
-        // TODO: Handle refund notification
+        // IMPORTANT: Refund identifies orders by acquiringOrderId, NOT paymentRequestId
+        // Key fields: result.acquiringOrderId, result.refundStatus, result.refundRequestId
+        const result = notification.result;
+        console.log(`Refund: acquiringOrderId=${result?.acquiringOrderId}, refundStatus=${result?.refundStatus}`);
       });
 
     const result = await handler.handleWebhook(body, signature);
 
     reply.header('X-SIGNATURE', result.responseSignature);
+    reply.header('Content-Type', 'application/json');
     reply.status(200).send(result.responseBody);
   });
 }

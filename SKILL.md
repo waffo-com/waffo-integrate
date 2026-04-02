@@ -1,6 +1,6 @@
 ---
 name: waffo-integrate
-description: Interactive guide for integrating Waffo Payment SDK into projects. Walks developers through selecting features (payments, refunds, subscriptions, webhooks), choosing language (Node.js/Java/Go), and generates production-ready integration code with Sandbox tests. Use this skill whenever the user mentions integrating Waffo SDK, adding payment functionality with Waffo, setting up Waffo webhooks, or asks about Waffo SDK usage. Trigger phrases include "integrate waffo", "waffo sdk", "waffo payment", "接入waffo", "集成waffo", "接入支付", "waffo webhook setup".
+description: Interactive guide for integrating Waffo Payment SDK into projects. Walks developers through selecting features (payments, refunds, subscriptions, webhooks), choosing language (Node.js/Java/Go), and generates production-ready integration code. Also runs integration verification tests through project endpoints to validate the integration works end-to-end. Use this skill whenever the user mentions integrating Waffo SDK, adding payment functionality with Waffo, setting up Waffo webhooks, asks about Waffo SDK usage, or wants to run integration tests. Trigger phrases include "integrate waffo", "waffo sdk", "waffo payment", "接入waffo", "集成waffo", "接入支付", "waffo webhook setup", "run test cases", "integration test", "集成测试", "验收测试", "跑测试用例", "UAT".
 ---
 
 # Waffo SDK Integration Guide
@@ -17,8 +17,7 @@ Step 4: Framework selection (if Webhook chosen)
 Step 4.5: Subscription event selection (if Subscription + Webhook chosen)
 Step 5: Present code for review
 Step 6: Write to project on approval
-Step 7: Generate Sandbox tests
-Step 8: Local end-to-end verification (if Webhook selected)
+Step 7: Integration verification (test through project endpoints)
 ```
 
 ---
@@ -64,32 +63,86 @@ Operations: `order().refund()`, `refund().inquiry()`
 
 Operations: `subscription().create()`, `subscription().inquiry()`, `subscription().cancel()`, `subscription().manage()`, `subscription().change()`, `subscription().changeInquiry()`
 
-**4. Webhook Notifications**
-> "Do you need to receive real-time notifications from Waffo? (payment results, refund results, subscription status changes). This requires a publicly accessible endpoint on your server."
-
-Events: `PAYMENT_NOTIFICATION`, `REFUND_NOTIFICATION`, `SUBSCRIPTION_STATUS_NOTIFICATION`, `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION`, `SUBSCRIPTION_CHANGE_NOTIFICATION`
-
-Only register handlers for events relevant to selected features. For example, if the developer only chose Order Payment + Refund, only register `onPayment` and `onRefund`. If the developer also chose Subscription, defer subscription event selection to Step 4.5.
-
-**5. Merchant Config Query** (optional, less common)
+**4. Merchant Config Query** (optional, less common)
 > "Do you need to query your merchant configuration (supported currencies, merchant status)?"
 
 Operations: `merchantConfig().inquiry()`
 
-**6. Payment Method Query** (optional, less common)
+**5. Payment Method Query** (optional, less common)
 > "Do you need to query available payment methods for your merchant?"
 
 Operations: `payMethodConfig().inquiry()`
 
+### Webhook Auto-Derive (NOT a separate question)
+
+Webhook is mandatory for any payment integration — do NOT ask the developer whether to integrate webhooks. Automatically register handlers based on selected features:
+
+| Selected Feature | Auto-register handlers |
+|-----------------|----------------------|
+| Order Payment | `onPayment` |
+| Refund | `onRefund` |
+| Subscription | `onSubscriptionStatus` + `onSubscriptionPeriodChanged` |
+| Subscription + Change | above + `onSubscriptionChange` |
+
+**CRITICAL — onPayment must filter out subscription payments:** When both Order Payment and Subscription are integrated, subscription billing also triggers `PAYMENT_NOTIFICATION`. The `onPayment` handler MUST check `paymentInfo.productName` and skip subscription types:
+
+```
+productName := notification.Result.PaymentInfo.ProductName
+if productName == "SUBSCRIPTION" || productName == "MINI_PROGRAM_SUBSCRIPTION" {
+    // Subscription payments are handled by onSubscriptionStatus / onSubscriptionPeriodChanged
+    // If you need to handle failed orders during subscription billing, add logic here
+    return
+}
+// Process one-time payment (ONE_TIME_PAYMENT / DIRECT_PAYMENT) below
+```
+
+**Webhook payload structure**: Each webhook notification's payload matches the corresponding inquiry API response structure. For example, `PaymentNotification` has the same fields as Order Inquiry response, `SubscriptionStatusNotification` matches Subscription Inquiry response.
+
+### Integration Context Questions
+
+After feature selection, ask these questions — their answers affect code generation:
+
+**Ask in order (skip questions that don't apply to selected features):**
+
+1. **User terminal type**: "What type of client will users pay from?"
+   - `WEB` — PC/desktop browser
+   - `APP` — Mobile app or tablet (WebView inside native app)
+
+2. **Checkout pay method selection**: "Do users select payment method on YOUR checkout page, or on Waffo's checkout page?"
+   - **Integrator's checkout** → must pass `payMethodType` and/or `payMethodName` in order create
+   - **Waffo's checkout** → do NOT pass `payMethodType`/`payMethodName`, let user choose on Waffo page
+
+3. **Subscription mode** *(only if Subscription selected)*: "When subscription renewal fails, what should happen?"
+   - **Payment-first**: Suspend benefits during retry period. On success, next period starts from success date. On permanent failure, stop retrying.
+   - **Service-first**: Continue providing service during retry period. Keep retrying in subsequent cycles.
+
+4. **Subscription refund** *(only if Subscription selected)*: "Do you need to refund subscription payments?"
+   - Yes → generate refund-related code for subscriptions
+   - No → skip subscription refund code
+
+5. **Pricing currency**: "Is your pricing single-currency (e.g., always USD) or multi-currency (different currencies based on user's country)?"
+   - **Single-currency** → hardcode `orderCurrency` / `currency` in code (e.g., `"USD"`)
+   - **Multi-currency** → `orderCurrency` / `currency` must be a parameter passed by the caller, NOT hardcoded. Generate code that accepts currency as input.
+   - Follow-up: "Which currencies do you need to support?" (for test coverage in Step 7)
+   - Note: Waffo checkout automatically displays payment methods available for the given currency — the skill does NOT need to map currency → payment methods.
+
+6. **iframe checkout** *(if applicable)*: "Will you load Waffo checkout page inside an iframe?"
+   - Yes → additional frontend config needed: `referrer-policy`, `allow="payment"`, responsive width
+   - Note: Apple Pay cannot be used inside iframe
+
+7. **Checkout expiry** *(if applicable)*: "Do you need a custom checkout page expiry time?"
+   - Default is 4 hours. Can be customized via `orderExpiredAt` field (UTC+0 timezone required).
+   - Note: Only `alipay`, `alipayhk`, `wechatpay` channels support custom expiry on the channel side.
+
 ### Smart Defaults
 
 - If developer selects "Order Payment", suggest Refund as well (most payment integrations need it)
-- If developer selects "Subscription", suggest Webhook (subscription lifecycle depends on it)
+- Webhook is always included automatically — no need to suggest or ask
 - Always include SDK initialization (WaffoConfig + Waffo instance) regardless of selection
 
-## Step 4: Framework Selection (Webhook only)
+## Step 4: Framework Selection
 
-If the developer selected Webhook, ask about their web framework.
+Since webhook is always included, ask about the web framework whenever Order Payment or Subscription is selected.
 
 **Recommend mainstream frameworks by language:**
 
@@ -103,9 +156,9 @@ Ask: "What web framework are you using? If you're not sure, I recommend [Express
 
 ## Step 4.5: Subscription Event Selection (Conditional)
 
-**Only when the developer selected both Subscription and Webhook in Step 3.**
+**Only when the developer selected Subscription in Step 3.** Events are auto-registered by default (see Webhook Auto-Derive above), but ask if they need additional events:
 
-Ask: "Subscription has several webhook events — which ones matter for your use case?"
+Ask: "Subscription webhook events are auto-configured. Do you also need these optional events?"
 
 | Use Case | Recommended Event | Handler |
 |----------|-------------------|---------|
@@ -125,9 +178,21 @@ Before writing any files, present the complete integration code for the develope
 1. **SDK initialization** (always)
 2. **Service layer** for each selected feature
 3. **Webhook route** (if selected)
-4. **Test files**
+4. **Test files** — generate at least one test function per selected feature module:
+   - Order Payment selected → `TestCreateOrder`, `TestQueryOrder`, `TestCancelOrder`
+   - Refund selected → `TestRefundOrder`, `TestQueryRefund`
+   - Subscription selected → `TestCreateSubscription`, `TestQuerySubscription`, `TestCancelSubscription`
+   - Merchant Config selected → `TestGetMerchantConfig`
+   - Payment Method selected → `TestGetPaymentMethods`
 
 **IMPORTANT**: Before generating any code, read `references/api-contract.md` to verify required fields, enum values, and field types. This is the source of truth extracted from openapi.json — do not guess field names or assume which fields are optional.
+
+**Exception handling (MANDATORY)**: Generated code MUST cover these four exception handling branches. Reference existing payment provider implementations (Stripe/Creem/PayPal) in the project for error handling patterns:
+
+1. **Channel Rejection / System Unavailable** (C0001/C0005) → Return user-friendly error message, guide user to retry or switch payment method
+2. **Unknown Status** (E0001 / WaffoUnknownStatusError) → Retry with same parameters up to 3 times → if still fails, do NOT close the order → show friendly message suggesting alternative payment method → use inquiry API result or webhook notification as source of truth
+3. **Signature Verification Failed** (in webhook handler) → Do NOT process this notification, keep order/subscription status unchanged → query correct status via inquiry API
+4. **Idempotency Conflict** (A0011) → Ensure each paymentRequestId / refundRequestId / subscriptionRequest is independently generated per request, never reused
 
 Then use the language-specific reference files for code templates:
 - Node.js: Read `references/node.md`
@@ -140,7 +205,8 @@ After the developer approves, write files to their project:
 
 1. **Install SDK dependency** (run the appropriate package manager command)
 2. **Create integration files** in a sensible project structure
-3. **Show next steps** (configure credentials, set up webhook endpoint, etc.)
+3. **Verify build**: Run the project's build command (`go build ./...`, `npm run build`, `mvn compile`) — the generated code **must compile on the first attempt** without manual fixes
+4. **Proceed to Step 7 (MANDATORY)**: After a successful build, you MUST immediately begin Step 7 (Integration Verification) **in the same response**. Output "✅ Build passed. Starting Step 7: Integration Verification..." and proceed without waiting for user input. If prerequisites are missing (credentials, running server, tunnel), list exactly what is needed and ask the developer — but do NOT end your turn or stop working. If you are running low on context, output a clear handoff message: "⚠️ Step 7 requires a new session. Run `集成测试` or `run integration tests` to continue."
 
 ### SDK Installation
 
@@ -148,7 +214,7 @@ Dynamically fetch the latest version before installing:
 
 **Node.js:**
 ```bash
-npm view @anthropic-ai/waffo-node version  # get latest
+npm view @waffo/waffo-node version  # get latest
 npm install @waffo/waffo-node
 ```
 
@@ -162,7 +228,11 @@ go get github.com/waffo-com/waffo-go@latest
 
 ### File Structure
 
-Adapt to the project's existing structure. If none exists, use these defaults:
+**Existing project adaptation (IMPORTANT):** Before using the default structure below, explore the project's existing layout. If the project already has a layered architecture (e.g., `controller/`, `service/`, `model/`, `setting/`, `router/`), place Waffo files into those existing directories following the project's naming conventions. Look for existing payment provider integrations (Stripe, PayPal, Creem, etc.) and mirror their patterns — file naming, route grouping, config variable style, error handling, and middleware usage. The default structures below are **only for new/empty projects**.
+
+**Competitor-first reference (IMPORTANT):** Before generating Waffo code, search the project for existing payment provider integrations (Stripe, Creem, PayPal, etc.) and align: amount calculation, webhook processing flow, order status transitions, refund benefit handling, route organization and naming. Waffo integration MUST reuse existing patterns to reduce the integrator's cognitive load — this also means many business questions can be answered by reading existing code instead of asking.
+
+Default structures (for new projects only):
 
 **Node.js:**
 ```
@@ -205,276 +275,107 @@ internal/
 internal/waffo/waffo_test.go  # Tests
 ```
 
-## Step 7: Generate Tests
-
-### Credential Detection
-
-Check for Waffo credentials in this order:
-1. Environment variables: `WAFFO_API_KEY`, `WAFFO_PRIVATE_KEY`, `WAFFO_PUBLIC_KEY`, `WAFFO_MERCHANT_ID`
-2. Project config files (`.env`, `application.yml`, etc.)
-
-### Test Strategy
-
-**If credentials found:**
-Generate integration tests that call Waffo Sandbox directly. Use `Environment.SANDBOX`. Each test should:
-- Call the real API
-- Assert `response.isSuccess()` with full diagnostic output on failure
-- Print request IDs and response data for debugging
-
-**If no credentials:**
-Generate test stubs with environment variable guards:
-```typescript
-const HAS_CREDENTIALS = !!process.env.WAFFO_API_KEY;
-
-describe('Waffo Payment', () => {
-  (HAS_CREDENTIALS ? it : it.skip)('creates an order via Sandbox', async () => {
-    // Real API call test — runs when credentials are configured
-  });
-});
-```
-
-Include a comment explaining how to configure credentials to enable the tests.
-
-### Test Error Logging
-
-Every API response assertion must include full diagnostic output before the assertion:
-- Request identifiers (paymentRequestId, subscriptionRequest, etc.)
-- Full response (code, message, data)
-
-This is critical because Sandbox tests depend on external services — when they fail, you need the request ID to investigate.
-
----
-
-## Step 8: Local End-to-End Verification
-
-After code is written and tests pass, offer to run a full local verification if the developer selected **Webhook**. This proves the entire flow works: create order → pay → receive webhook callback.
-
-Ask: "Want to verify the full payment + webhook flow locally? I'll set up a tunnel so Waffo can reach your local server."
-
-### Prerequisites Check
-
-1. **Local server running**: Check if the webhook port is listening (`lsof -i :PORT` or `curl http://localhost:PORT/health`). If not, guide the developer to start it.
-2. **Credentials configured**: Verify Waffo credentials are available (env vars or config files).
-
-### Tunnel Setup
-
-Detect which tunnel tool is installed, in order of preference:
-
-| Tool | Detection | Start Command | Get Public URL |
-|------|-----------|---------------|----------------|
-| cloudflared | `which cloudflared` | `cloudflared tunnel --url http://localhost:PORT` | Parse stdout for `https://*.trycloudflare.com` |
-| ngrok | `which ngrok` | `ngrok http PORT` | `curl http://localhost:4040/api/tunnels` → `.tunnels[0].public_url` |
-
-If neither is installed, show installation instructions for both and let the developer choose.
-
-Start the tunnel in the background and capture the public URL.
-
-### Verification Flow
-
-```
-1. Start tunnel → obtain public URL
-2. Query payment methods: payMethodConfig().inquiry()
-   → Display supported methods so the developer knows what's available
-3. Create order:
-   - notifyUrl = {tunnelUrl}/{webhookPath}
-   - successRedirectUrl = {tunnelUrl}/verification-success
-   - No payMethodType specified (let checkout page show all options)
-4. Output checkoutUrl → developer opens it and completes payment manually
-5. Poll order status: order().inquiry() every 3s, timeout 120s
-   → Wait for orderStatus to change from PENDING
-6. Verify webhook received:
-   - ngrok: query inspection API at http://localhost:4040/api/requests/http
-     → look for POST to webhookPath with 200 response
-   - cloudflared: query the /waffo/last-webhook debug endpoint (see below)
-7. Output verification report
-8. Clean up: stop tunnel process
-```
-
-### Webhook Debug Endpoint (cloudflared only)
-
-When cloudflared is the tunnel tool, generate a temporary debug endpoint in the developer's project that stores the last webhook received. This enables webhook verification without ngrok's inspection API.
-
-**Node.js (Express):**
-```typescript
-// Temporary — remove after verification
-let lastWebhook: any = null;
-app.get('/waffo/last-webhook', (req, res) => res.json(lastWebhook));
-// In webhook handler, add: lastWebhook = { receivedAt: new Date(), body, signature };
-```
-
-**Java (Spring Boot):**
-```java
-// Temporary — remove after verification
-private static volatile String lastWebhook = null;
-@GetMapping("/waffo/last-webhook")
-public String lastWebhook() { return lastWebhook; }
-// In webhook handler, add: lastWebhook = body;
-```
-
-**Go (Gin):**
-```go
-// Temporary — remove after verification
-var lastWebhook atomic.Value
-r.GET("/waffo/last-webhook", func(c *gin.Context) { c.String(200, lastWebhook.Load().(string)) })
-// In webhook handler, add: lastWebhook.Store(string(body))
-```
-
-After verification completes, remind the developer to remove this debug endpoint.
-
-### Subscription Verification (if Subscription selected)
-
-After payment verification succeeds, continue with subscription-specific verification. This requires Playwright MCP for automating the management page.
-
-**Prerequisites**: Playwright MCP must be available. If not, output the management URL and instruct the developer to click buttons manually.
-
-#### Subscription Verification Flow
-
-```
-1. Create subscription:
-   - notifyUrl = {tunnelUrl}/{webhookPath}
-   - paymentInfo.productName = 'SUBSCRIPTION'
-   - Use a short period (e.g., periodType='DAILY', periodInterval='1') for testing
-2. Output checkoutUrl → developer completes initial payment manually
-3. Poll subscription status: subscription().inquiry() every 3s, timeout 120s
-   → Wait for subscriptionStatus = ACTIVE
-4. Verify SUBSCRIPTION_STATUS_NOTIFICATION webhook received (status=ACTIVE)
-5. Get management page: subscription().manage({ subscriptionRequest })
-   → Obtain managementUrl from response
-   → Sandbox environment returns URL with mock=true already included
-6. Use Playwright to automate next period billing:
-   a. Navigate to managementUrl
-   b. Wait for page load
-   c. Click "Next period payment success" button
-   d. Wait for SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION webhook
-   e. Query subscription to confirm still ACTIVE
-7. Output subscription verification report
-```
-
-#### Management Page Automation (Playwright)
-
-The Sandbox management page (with `mock=true`) shows two test buttons at the bottom:
-
-| Button Text | Effect | Expected Webhook |
-|------------|--------|-----------------|
-| "Next period payment success" | Simulates successful period billing | `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION` |
-| "Next period payment failed," | Simulates failed period billing | `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION` (with failure status) |
-
-**Playwright automation steps:**
-
-```
-1. browser_navigate → managementUrl (Sandbox URL already includes mock=true)
-2. browser_snapshot → verify page loaded with "Subscription Details" heading
-3. browser_click → button "Next period payment success"
-4. Wait 5-10s for webhook delivery
-5. Verify webhook received (ngrok inspection API or /waffo/last-webhook)
-6. subscription().inquiry() → confirm subscription still ACTIVE
-```
-
-#### Page Structure Reference
-
-The management page contains:
-- **Subscription Details**: product name, status (Active), price, next billing date
-- **Cancel Subscription** button
-- **Payment Method** section: list of saved payment methods
-- **Billing History** section: table of past billing records
-- **Mock buttons** (only with `mock=true`): "Next period payment success" and "Next period payment failed,"
-
-### Verification Report
-
-Output a clear summary. For payment-only verification:
-
-```
-┌─────────────────────────────────────────────┐
-│        Waffo Payment Verification            │
-├──────────────────┬──────────────────────────┤
-│ Tunnel           │ ✅ cloudflared / ngrok    │
-│ Create Order     │ ✅ acquiringOrderId=xxx   │
-│ Checkout URL     │ https://...              │
-│ Payment Status   │ ✅ PAY_SUCCESS            │
-│ Webhook Received │ ✅ PAYMENT_NOTIFICATION   │
-│ Signature Valid  │ ✅ 200 response returned  │
-└──────────────────┴──────────────────────────┘
-```
-
-For subscription verification (appended to above):
-
-```
-┌─────────────────────────────────────────────┐
-│      Waffo Subscription Verification         │
-├──────────────────┬──────────────────────────┤
-│ Create Sub       │ ✅ subscriptionId=xxx     │
-│ Initial Payment  │ ✅ Completed via checkout │
-│ Sub Status       │ ✅ ACTIVE                 │
-│ Sub Webhook      │ ✅ SUBSCRIPTION_STATUS_NOTIFICATION │
-│ Manage URL       │ ✅ Retrieved              │
-│ Next Period      │ ✅ Triggered via Playwright│
-│ Period Webhook   │ ✅ SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION │
-└──────────────────┴──────────────────────────┘
-```
-
-If any step fails, show the failure reason and suggest fixes.
-
----
-
-## Configuration Template
-
-Always generate an SDK initialization module. The developer needs these credentials from the Waffo Dashboard:
-
-| Config | Source | Required |
-|--------|--------|----------|
-| `apiKey` | Waffo Dashboard | Yes |
-| `privateKey` | Merchant's RSA private key (PKCS8, Base64) | Yes |
-| `waffoPublicKey` | Waffo's RSA public key (X509, Base64) | Yes |
-| `environment` | `SANDBOX` for testing, `PRODUCTION` for live | Yes |
-| `merchantId` | Waffo Dashboard | Yes |
-| `connectTimeout` | Default 10000ms | No |
-| `readTimeout` | Default 30000ms | No |
-
-Recommend using environment variables for all secrets. Never hardcode credentials.
-
----
-
-## Extended References
-
-When the developer has questions beyond basic integration (troubleshooting, advanced patterns, status handling), point them to the relevant bundled reference files:
-
-| Topic | Reference |
-|-------|-----------|
-| Field names, types, required/optional | Read `references/api-contract.md` |
-| Status handling & webhook-driven state | Read `references/api-contract.md` § 7 "Status Handling Guide" |
-| Node.js code patterns | Read `references/node.md` |
-| Java code patterns | Read `references/java.md` |
-| Go code patterns | Read `references/go.md` |
-| FAQ, troubleshooting, best practices | Read `docs/INDEX.md` — knowledge base index with links to scenario-specific articles |
-
----
-
 ## Important Notes for Generated Code
 
 1. **Response handling**: All SDK methods return `ApiResponse<T>`. Always check `isSuccess()` before accessing `getData()`.
 
 2. **Error types**:
    - `WaffoError` — client-side errors (validation, config)
-   - `WaffoUnknownStatusError` — network errors on write operations (create, refund, cancel). The operation may or may not have succeeded. The developer must query status to confirm.
+   - `WaffoUnknownStatusError` — network errors on **all write operations**. The operation may or may not have succeeded. The developer must query status to confirm. **Every write operation must have a `WaffoUnknownStatusError` catch branch** — the full list:
+     - `order().create()` — query via `order().inquiry()`
+     - `order().refund()` — query via `refund().inquiry()`
+     - `order().cancel()` — query via `order().inquiry()`
+     - `subscription().create()` — query via `subscription().inquiry()`
+     - `subscription().cancel()` — query via `subscription().inquiry()`
+     - `subscription().change()` — query via `subscription().changeInquiry()`
+     - `order().capture()` — query via `order().inquiry()`
 
 3. **Timestamp auto-injection**: The SDK automatically injects `requestedAt` / `orderRequestedAt` if not provided. No need to set these manually.
 
 4. **merchantId auto-injection**: The SDK automatically adds `merchantId` to all requests from config.
 
-5. **Webhook response**: The webhook handler returns a signed response. The developer must set `X-SIGNATURE` header and return `responseBody` as-is. Do not modify the response body.
+5. **Webhook response**: The webhook handler returns a signed response. The developer must set three things: (1) `X-SIGNATURE` header from `webhookResult.responseSignature`, (2) `Content-Type: application/json` header (SDK does not set this automatically — the framework default is usually `text/plain`), (3) return `responseBody` as-is. Do not modify the response body.
 
-6. **Thread safety**: Recommend creating a single SDK instance and reusing it (singleton pattern).
+6. **Webhook business logic pattern**: The webhook handler must NOT be left as TODO placeholders. **Every registered notification handler** must implement the three-stage pattern:
+   - **Stage 1 — Idempotency check**: Query the local order/subscription by its ID. If already in terminal status (success/failed/cancelled), skip processing and return success response.
+   - **Stage 2 — Concurrency protection**: Lock the order (mutex, distributed lock, or DB row-level lock with `FOR UPDATE`) before processing to prevent duplicate webhooks from double-executing business logic.
+   - **Stage 3 — Business execution in transaction**: Within a database transaction: update order status → execute business logic → commit. If any step fails, rollback.
 
-7. **Request ID length**: `paymentRequestId`, `refundRequestId`, `subscriptionRequest` all have a **max length of 32 characters**. Do NOT use raw UUIDs (36 chars). Use UUID without dashes: `crypto.randomUUID().replace(/-/g, '')` (Node.js), `UUID.randomUUID().toString().replace("-", "")` (Java), `strings.ReplaceAll(uuid.New().String(), "-", "")` (Go).
+   **Per-handler business logic guidance** — ask the developer for each handler's business rules:
 
-8. **Required fields by merchant**: `userInfo.userTerminal` is required — values: `WEB` (PC/desktop browser), `APP` (mobile app, tablet), `WAP` (mobile browser), `SYSTEM` (server-to-server). Ask the developer what terminal type their users will use, and set the default accordingly. Also include `successRedirectUrl` for payment orders — most merchants require a redirect URL after payment.
+   | Handler | Typical business logic | What to ask |
+   |---------|----------------------|-------------|
+   | `onPayment` | Add balance, fulfill order, grant credits | "What happens when payment succeeds?" |
+   | `onRefund` | Revoke benefits, deduct balance, mark refunded | "What to revoke on refund success?" |
+   | `onSubscriptionStatus` | Activate/suspend/cancel subscription record | "How do you track subscription lifecycle?" |
+   | `onSubscriptionPeriodChanged` | Extend validity period, reset usage quota, handle renewal failure (e.g., mark past-due, notify user) | "What happens on renewal success/failure?" |
+   | `onSubscriptionChange` | Update plan/amount/period in local record, apply prorated changes | "What changes on upgrade/downgrade?" |
 
-9. **paymentInfo.productName**: Use `'ONE_TIME_PAYMENT'` for one-time orders and `'SUBSCRIPTION'` for subscriptions — these are the standard product name values recognized by Waffo.
+   **Fallback rule**: If business logic cannot be inferred from the project's existing code, do NOT silently log and skip. Instead:
+   - Generate a stub with `// ACTION REQUIRED: implement {specific business logic}` comment
+   - **Explicitly ask the developer** in the interactive session: "I cannot infer the business logic for `{handler}` — what should happen when `{event}` is received?"
+   - Do NOT treat `// ACTION REQUIRED` as acceptable output — it must be resolved before Step 6 writes code
 
-10. **Subscription-specific field names**: Subscription create uses `currency` and `amount` (NOT `orderCurrency`/`orderAmount` used by order create). Required fields for subscription create: `subscriptionRequest`, `merchantSubscriptionId`, `currency`, `amount`, `notifyUrl`, `successRedirectUrl`, `productInfo` (with `description`, `periodType`, `periodInterval`), `userInfo` (with `userTerminal`), `goodsInfo` (with `goodsId`, `goodsName`, `goodsUrl`), `paymentInfo` (with `productName` and `payMethodType`).
+7. **Thread safety**: Recommend creating a single SDK instance and reusing it (singleton pattern).
 
-11. **PeriodType values**: Valid values are `'DAILY'`, `'WEEKLY'`, `'MONTHLY'`. There is no `YEARLY`. Period interval is a string (e.g., `'1'`), not a number.
+8. **Request ID length**: `paymentRequestId`, `refundRequestId`, `subscriptionRequest` all have a **max length of 32 characters**. Do NOT use raw UUIDs (36 chars). Use UUID without dashes: `crypto.randomUUID().replace(/-/g, '')` (Node.js), `UUID.randomUUID().toString().replace("-", "")` (Java), `strings.ReplaceAll(uuid.New().String(), "-", "")` (Go).
 
-12. **manage() API**: `subscription().manage()` returns a `managementUrl` for the subscription management page. It only works when the subscription is `ACTIVE` (payment completed). Request requires `subscriptionRequest` or `subscriptionId`. The Sandbox management URL includes `mock=true` automatically.
+9. **Required fields by merchant**: `userInfo.userTerminal` is required — values: `WEB` (PC/desktop browser), `APP` (mobile app, tablet). Ask the developer what terminal type their users will use, and set the default accordingly. Also include `successRedirectUrl` for payment orders — most merchants require a redirect URL after payment.
 
-13. **payMethodType is REQUIRED for subscriptions**: `paymentInfo.payMethodType` must be set for subscription create — without it the server returns A0003. Default to `'CREDITCARD,DEBITCARD,APPLEPAY,GOOGLEPAY'` (comma-separated string supporting multiple payment methods). This is different from `payMethodName` which is optional. Do NOT omit `payMethodType` or replace it with `payMethodName`.
+10. **paymentInfo.productName**: Use `'ONE_TIME_PAYMENT'` for one-time orders and `'SUBSCRIPTION'` for subscriptions — these are the standard product name values recognized by Waffo.
+
+11. **Subscription-specific field names**: Subscription create uses `currency` and `amount` (NOT `orderCurrency`/`orderAmount` used by order create). Required fields for subscription create: `subscriptionRequest`, `merchantSubscriptionId`, `currency`, `amount`, `notifyUrl`, `successRedirectUrl`, `productInfo` (with `description`, `periodType`, `periodInterval`), `userInfo` (with `userTerminal`), `goodsInfo` (with `goodsId`, `goodsName`, `goodsUrl`), `paymentInfo` (with `productName` and `payMethodType`).
+
+12. **PeriodType values**: Valid values are `'DAILY'`, `'WEEKLY'`, `'MONTHLY'`. There is no `YEARLY`. Period interval is a string (e.g., `'1'`), not a number.
+
+13. **manage() API**: `subscription().manage()` returns a `managementUrl` for the subscription management page. It only works when the subscription is `ACTIVE` (payment completed). Request requires `subscriptionRequest` or `subscriptionId`. The Sandbox management URL includes `mock=true` automatically.
+
+14. **payMethodType is REQUIRED for subscriptions**: `paymentInfo.payMethodType` must be set for subscription create — without it the server returns A0003. Default to `'CREDITCARD,DEBITCARD,APPLEPAY,GOOGLEPAY'` (comma-separated string supporting multiple payment methods). This is different from `payMethodName` which is optional. Do NOT omit `payMethodType` or replace it with `payMethodName`.
+
+15. **Store acquiringOrderID from order create response**: The `order().create()` response contains `acquiringOrderID` — this is Waffo's internal order identifier and is the **only key** in refund webhook notifications (`REFUND_NOTIFICATION`). You MUST store this value alongside the local order record (e.g., in a dedicated column or field). Without it, refund webhooks cannot be matched to local orders because `paymentRequestID` is NOT included in refund notifications.
+
+16. **Create local record for subscription**: After `subscription().create()` succeeds, you MUST insert a local order/subscription record using `subscriptionRequest` as the lookup key. All subscription webhooks (`SUBSCRIPTION_STATUS_NOTIFICATION`, `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION`, `SUBSCRIPTION_CHANGE_NOTIFICATION`) identify orders by `subscriptionRequest`. If no local record exists, every subscription webhook will silently fail. Also store `subscriptionID` from the response for future reference.
+
+17. **Wire SDK client reset to config updates**: If the project stores SDK credentials in a database or config file that can be updated at runtime (e.g., admin settings page), ensure that changing any Waffo credential triggers a reset of the SDK singleton. Otherwise the old credentials remain in memory until server restart. Use a callback, event, or direct call depending on the project's architecture.
+
+18. **Return and persist generated request IDs**: When the integration generates a request ID (e.g., `paymentRequestId`, `refundRequestId`, `subscriptionRequest`) during an API call, that ID MUST be (1) returned to the caller in the HTTP response, and (2) persisted in the local database. These IDs are required for subsequent inquiry/status operations. If they are generated internally but not exposed, the corresponding query endpoints become unusable.
+
+19. **Set all redirect URLs**: Order create and subscription create MUST include all three redirect URLs: `successRedirectUrl`, `failedRedirectUrl`, and `cancelRedirectUrl`. Missing the failed or cancel URL causes the Waffo checkout page to show no return link on failure/cancellation, trapping the user on the payment page.
+
+20. **orderDescription**: Pass a specific, descriptive order description (e.g., "Premium Plan - 1 Month"). This helps identify orders during customer support investigations.
+
+21. **goodsName is required**: `goodsName` must always be provided. Additionally, provide either `goodsUrl` (product detail page URL, NOT an image URL) or `appName` (the app's name as listed on AppStore/Google Play). At least one of the two is recommended.
+
+22. **userEmail format**: Do NOT include the word "test" in `userEmail`. Do NOT share the same email across multiple users. Recommended format for generated emails: `{userId}@example.com`.
+
+23. **Card payment payMethodType**: For card-based payments, recommend setting `payMethodType="CREDITCARD,DEBITCARD"` without passing `payMethodName`. This lets Waffo auto-detect the card brand from the BIN (Bank Identification Number).
+
+24. **No payMethodCountry for global cards**: Do NOT pass `payMethodCountry` for global card payments. This field is only relevant for local payment methods.
+
+25. **Time field format**: All time fields (`orderRequestedAt`, `userCreatedAt`, etc.) must use ISO 8601 UTC+0 format ending with `Z`. Milliseconds must not exceed 3 digits. Example: `2026-04-01T12:00:00.000Z`.
+
+26. **subscriptionManagementUrl**: This URL must be provided for subscription integrations and MUST require authentication. Users should not be able to manage their subscription without being logged in.
+
+27. **Webhook callback port**: Waffo can only deliver webhooks to ports **80** (HTTP) and **443** (HTTPS). Other ports are not accessible. Ensure your webhook endpoint is served on one of these standard ports.
+
+28. **Webhook response format**: The webhook response body must be exactly `{"message":"success"}` with `Content-Type: application/json`. No extra whitespace, no different JSON keys, no HTML. When using the SDK's `HandleWebhook()`, this is handled automatically.
+
+29. **Redirect URL format**: Redirect URLs (`successRedirectUrl`, `failedRedirectUrl`, `cancelRedirectUrl`) support both HTTPS links and deeplinks (e.g., `komoe://payment/result`). Both formats are valid.
+
+30. **Currency parameterization**: If the developer answered "multi-currency" in Step 3 Q5, `orderCurrency` (for orders) and `currency` (for subscriptions) MUST be function parameters, NOT hardcoded values. Waffo checkout automatically displays payment methods available for the given currency — the code does not need to handle currency→payment-method mapping.
+
+31. **Refund currency must match order currency**: The refund `orderCurrency` and `orderAmount` must use the **original order's currency**, not the project's internal accounting currency. For example, if a user paid in IDR, the refund must also be in IDR — even if the project internally tracks revenue in USD.
+
+---
+
+## Step 7: Integration Verification
+
+Read `references/integration-verification.md` for the complete verification protocol.
+
+**Trigger phrases**: "run test cases", "integration test", "集成测试", "验收测试", "跑测试用例", "UAT"
+
+**Entry**: After Step 6 (natural continuation) or direct trigger on an already-integrated project.
+
+**Phases**: A (core tests) → B1 (card) → B2 (non-card) → C1 (refund) → C2 (subscription) → D (passive verification + report)
+
+**Also reads**: `references/acceptance-criteria.md` (test cards, Playwright scripts, report template), `references/sandbox-knowledge.md` (Sandbox quirks K024-K030), `references/business-validation.md` (passive verification checklist)

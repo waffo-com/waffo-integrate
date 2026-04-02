@@ -4,7 +4,7 @@
     {
       "id": 1,
       "prompt": "I'm building a Node.js Express e-commerce backend. I need to integrate Waffo payment — I need to accept credit card payments and handle refunds. My project is at ./my-project. I already have the SDK credentials in .env.",
-      "expected_output": "Generate Node.js code with order create, order inquiry, refund, refund inquiry. Should use correct field names (orderCurrency, orderAmount), include paymentRequestId generation with 32-char limit, proper error handling, and sandbox test files.",
+      "expected_output": "Generate Node.js code with order create, order inquiry, refund, refund inquiry. Should use correct field names (orderCurrency, orderAmount), include paymentRequestId generation with 32-char limit, proper error handling.",
       "files": [],
       "assertions": [
         {
@@ -26,15 +26,9 @@
           "critical": true
         },
         {
-          "name": "sandbox_test_generated",
+          "name": "webhook_signature_handling",
           "type": "output_contains",
-          "check": "Generates test file that calls real Sandbox API with assertions",
-          "critical": false
-        },
-        {
-          "name": "error_diagnostic_in_test",
-          "type": "output_contains",
-          "check": "Test assertions include diagnostic output (code, message, data) before expect()",
+          "check": "Webhook handler verifies signature and returns signed response with X-SIGNATURE header",
           "critical": true
         }
       ]
@@ -42,7 +36,7 @@
     {
       "id": 2,
       "prompt": "I need to add subscription billing to my Node.js project at ./my-project. Monthly subscription, $9.99/month. I want create subscription, query status, and get the management page URL. SDK credentials already in .env.",
-      "expected_output": "Generate subscription code using 'currency'/'amount' (NOT orderCurrency/orderAmount), periodType='MONTHLY', periodInterval='1' (string), includes goodsInfo with goodsUrl, payMethodType in paymentInfo, and manage() call. Test should handle A0028 for non-active subscriptions.",
+      "expected_output": "Generate subscription code using 'currency'/'amount' (NOT orderCurrency/orderAmount), periodType='MONTHLY', periodInterval='1' (string), includes goodsInfo with goodsUrl, payMethodType in paymentInfo, and manage() call.",
       "files": [],
       "assertions": [
         {
@@ -74,19 +68,13 @@
           "type": "output_contains",
           "check": "Subscription create includes paymentInfo.payMethodType",
           "critical": true
-        },
-        {
-          "name": "manage_handles_inactive",
-          "type": "output_contains",
-          "check": "manage() test handles non-active subscription gracefully (expects A0028 or similar error)",
-          "critical": false
         }
       ]
     },
     {
       "id": 3,
       "prompt": "我要在一个 Java Spring Boot 项目里集成 Waffo 支付，需要接受付款和接收 webhook 通知。项目在 ./my-project，凭据已经配好了在环境变量里。",
-      "expected_output": "Generate Java Spring Boot code with order create, webhook handler (Express → Spring Boot controller). Webhook handler should verify signature, parse notification, return signed response with X-SIGNATURE header. Code should use WaffoConfig builder pattern.",
+      "expected_output": "Generate Java Spring Boot code with order create, webhook handler. Webhook handler should verify signature, parse notification, return signed response with X-SIGNATURE header. Code should use WaffoConfig builder pattern.",
       "files": [],
       "assertions": [
         {
@@ -118,6 +106,102 @@
           "type": "output_contains",
           "check": "Java request ID uses UUID.randomUUID().toString().replace(\"-\", \"\") for 32-char limit",
           "critical": true
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "I've already integrated Waffo SDK in my Go Gin project at ./my-project. The project has POST /api/waffo/pay for order creation (requires JWT auth) and POST /api/waffo/webhook for notifications. Webhook handler adds balance on payment success. I want to run the integration verification tests. Credentials are in the database.",
+      "expected_output": "Trigger Step 7 Integration Verification. Should perform Context Discovery first (find routes, controllers, webhook business logic, pay methods, credentials). Then execute AC items through the project's own endpoints, not SDK directly. Use Playwright with test cards for checkout. Verify business logic (balance changes). Generate verification report with FULL/CONDITIONAL/INCOMPLETE verdict.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "context_discovery",
+          "type": "output_contains",
+          "check": "Performs Context Discovery: identifies project routes, webhook handler business logic, pay methods, and credentials before running any tests",
+          "critical": true
+        },
+        {
+          "name": "tests_through_project_endpoints",
+          "type": "output_contains",
+          "check": "Tests are executed through the project's own HTTP endpoints (e.g., POST /api/waffo/pay), not by calling SDK directly",
+          "critical": true
+        },
+        {
+          "name": "uses_test_cards",
+          "type": "output_contains",
+          "check": "References Sandbox test card numbers from acceptance-criteria.md for Playwright checkout automation",
+          "critical": true
+        },
+        {
+          "name": "business_logic_verification",
+          "type": "output_contains",
+          "check": "Verifies project business logic after payment (e.g., checks balance was added after webhook success, balance unchanged after failure)",
+          "critical": true
+        },
+        {
+          "name": "generates_report",
+          "type": "output_contains",
+          "check": "Generates verification report with AC item results and FULL/CONDITIONAL/INCOMPLETE verdict",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Integrate Waffo into my Go Gin project at ./my-project. I need payments, refunds, AND subscriptions. All features. Use default options (WEB, Waffo checkout, payment-first, need subscription refund, USD, no iframe, default expiry).",
+      "expected_output": "Should NOT ask about webhook as a separate feature. Should auto-include onPayment, onRefund, onSubscriptionStatus, onSubscriptionPeriodChanged handlers. The onPayment handler MUST filter out subscription payments by checking productName. Should ask about framework (Gin detected).",
+      "files": [],
+      "assertions": [
+        {
+          "name": "no_webhook_question",
+          "type": "output_not_contains",
+          "check": "Does NOT ask 'Do you need to receive real-time notifications' or present Webhook as a separate feature choice",
+          "critical": true
+        },
+        {
+          "name": "auto_includes_webhook_handlers",
+          "type": "output_contains",
+          "check": "Generated code includes onPayment, onRefund, onSubscriptionStatus, and onSubscriptionPeriodChanged handlers without user selecting webhook",
+          "critical": true
+        },
+        {
+          "name": "onPayment_filters_subscription",
+          "type": "output_contains",
+          "check": "onPayment handler checks productName and skips SUBSCRIPTION/MINI_PROGRAM_SUBSCRIPTION with a return statement",
+          "critical": true
+        },
+        {
+          "name": "subscription_skip_comment",
+          "type": "output_contains",
+          "check": "The productName filter includes a comment about handling failed subscription orders if needed",
+          "critical": false
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "I need to add Waffo payment to my Node.js Express project. Just one-time payments, no subscriptions. Project at ./my-project, credentials in .env.",
+      "expected_output": "Should auto-include onPayment webhook handler. Should NOT include subscription webhook handlers. The onPayment handler should NOT have the productName subscription filter since subscriptions are not integrated.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "auto_includes_onPayment",
+          "type": "output_contains",
+          "check": "Generated code includes onPayment handler without asking about webhook separately",
+          "critical": true
+        },
+        {
+          "name": "no_subscription_handlers",
+          "type": "output_not_contains",
+          "check": "Does NOT include onSubscriptionStatus or onSubscriptionPeriodChanged since subscription was not selected",
+          "critical": true
+        },
+        {
+          "name": "no_subscription_filter_in_onPayment",
+          "type": "output_not_contains",
+          "check": "onPayment handler does NOT check for SUBSCRIPTION productName since there are no subscriptions to conflict with",
+          "critical": false
         }
       ]
     }

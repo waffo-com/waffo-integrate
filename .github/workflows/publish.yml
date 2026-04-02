@@ -16,6 +16,27 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Verify internal links
+        run: |
+          # Check all markdown links in docs/ and SKILL.md point to existing files
+          error=0
+          for file in SKILL.md docs/*.md; do
+            grep -oP '\((?:\.\./)?(references/[^)]+|docs/[^)]+)\)' "$file" 2>/dev/null | tr -d '()' | while read link; do
+              # Resolve relative path from the file's directory
+              dir=$(dirname "$file")
+              target=$(cd "$dir" && realpath -m "$link" 2>/dev/null || echo "$dir/$link")
+              if [ ! -f "$target" ]; then
+                echo "BROKEN LINK: $file -> $link (resolved: $target)"
+                exit 1
+              fi
+            done || error=1
+          done
+          if [ $error -ne 0 ]; then
+            echo "::error::Broken internal links found. Fix before publishing."
+            exit 1
+          fi
+          echo "All internal links valid."
+
       - name: Publish
         run: npm publish --access public
         env:

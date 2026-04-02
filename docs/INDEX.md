@@ -2,9 +2,15 @@
 
 Extended documentation for common scenarios, troubleshooting, and best practices when integrating Waffo Payment SDK.
 
-> **For AI assistants**: When a developer's question is not covered by `SKILL.md` or `references/`, search this index for relevant articles and read the linked document.
+> **For AI assistants**: When a developer's question is not covered by `SKILL.md` or `references/`, search this index for relevant articles and read the linked document. If the local index also has no answer, use the **Remote Fallback** section below to search the latest online version.
 
 ---
+
+## References
+
+| Topic | Document | Description |
+|-------|----------|-------------|
+| Acceptance Criteria | [../references/acceptance-criteria.md](../references/acceptance-criteria.md) | 15 acceptance criteria (AC-1~AC-15) for project-level integration verification |
 
 ## FAQ
 
@@ -38,6 +44,34 @@ Extended documentation for common scenarios, troubleshooting, and best practices
 | Idempotency design | [best-practices/idempotency.md](best-practices/idempotency.md) | Request ID generation, retry strategy, deduplication |
 | Multi-currency checkout | [best-practices/multi-currency.md](best-practices/multi-currency.md) | orderCurrency vs userCurrency, FX handling |
 -->
+
+---
+
+## Remote Fallback
+
+When the local knowledge base does not cover a developer's issue, fetch the latest version from the remote repository. This ensures developers get up-to-date answers even if their local skill installation is outdated.
+
+**Step 1**: Fetch the latest remote INDEX.md and scan for matching articles:
+```
+WebFetch: https://raw.githubusercontent.com/waffo-com/waffo-integrate/main/docs/INDEX.md
+```
+Search the fetched index for keywords matching the developer's question (error codes, feature names, symptoms).
+
+**Step 2**: If a matching article is found, fetch its content:
+```
+WebFetch: https://raw.githubusercontent.com/waffo-com/waffo-integrate/main/docs/{path-from-index}
+```
+
+**Step 3**: If no article matches in the index, search the docs directory listing for related files:
+```
+WebFetch: https://api.github.com/repos/waffo-com/waffo-integrate/contents/docs?ref=main
+```
+Scan filenames for keyword matches, then fetch the most relevant file.
+
+**When to use remote fallback**:
+- Developer encounters an error code not documented locally (e.g., new error code added after their skill version)
+- Local FAQ/Troubleshooting/Best Practices sections show "Coming soon"
+- Developer asks about a feature or scenario not covered by bundled references
 
 ---
 

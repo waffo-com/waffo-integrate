@@ -4,14 +4,22 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-const SKILL_FILES = [
-  'SKILL.md',
-  'references/api-contract.md',
-  'references/node.md',
-  'references/java.md',
-  'references/go.md',
-  'docs/INDEX.md',
-];
+// Auto-discover skill files from directories listed in package.json "files"
+// No hardcoded list — adding/renaming files just works.
+const SKILL_DIRS = ['references', 'docs'];
+const SKILL_ROOT_FILES = ['SKILL.md'];
+
+function discoverSkillFiles(srcDir) {
+  const files = [...SKILL_ROOT_FILES];
+  for (const dir of SKILL_DIRS) {
+    const dirPath = path.join(srcDir, dir);
+    if (!fs.existsSync(dirPath)) continue;
+    for (const file of fs.readdirSync(dirPath)) {
+      if (file.endsWith('.md')) files.push(path.join(dir, file));
+    }
+  }
+  return files;
+}
 
 const TARGETS = {
   claude: path.join(os.homedir(), '.claude', 'skills', 'waffo-integrate'),
@@ -22,7 +30,8 @@ function copySkillFiles(targetDir, label) {
   const srcDir = path.resolve(__dirname, '..');
   let copied = 0;
 
-  for (const file of SKILL_FILES) {
+  const skillFiles = discoverSkillFiles(srcDir);
+  for (const file of skillFiles) {
     const src = path.join(srcDir, file);
     const dest = path.join(targetDir, file);
 
