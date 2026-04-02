@@ -290,12 +290,25 @@ internal/waffo/waffo_test.go  # Tests
 
 5. **Webhook response**: The webhook handler returns a signed response. The developer must set `X-SIGNATURE` header and return `responseBody` as-is. Do not modify the response body.
 
-6. **Webhook business logic pattern**: The webhook handler must NOT be left as TODO placeholders. For each notification type, implement the three-stage pattern:
+6. **Webhook business logic pattern**: The webhook handler must NOT be left as TODO placeholders. **Every registered notification handler** must implement the three-stage pattern:
    - **Stage 1 — Idempotency check**: Query the local order/subscription by its ID. If already in terminal status (success/failed/cancelled), skip processing and return success response.
    - **Stage 2 — Concurrency protection**: Lock the order (mutex, distributed lock, or DB row-level lock with `FOR UPDATE`) before processing to prevent duplicate webhooks from double-executing business logic.
-   - **Stage 3 — Business execution in transaction**: Within a database transaction: update order status → execute business logic (e.g., add balance, activate subscription) → commit. If any step fails, rollback.
+   - **Stage 3 — Business execution in transaction**: Within a database transaction: update order status → execute business logic → commit. If any step fails, rollback.
 
-   Ask the developer what business logic to execute on payment success (e.g., "add quota to user", "activate subscription", "fulfill order"). Do NOT generate empty TODOs — generate the actual implementation based on the project's existing patterns (find how other payment providers handle webhook success).
+   **Per-handler business logic guidance** — ask the developer for each handler's business rules:
+
+   | Handler | Typical business logic | What to ask |
+   |---------|----------------------|-------------|
+   | `onPayment` | Add balance, fulfill order, grant credits | "What happens when payment succeeds?" |
+   | `onRefund` | Revoke benefits, deduct balance, mark refunded | "What to revoke on refund success?" |
+   | `onSubscriptionStatus` | Activate/suspend/cancel subscription record | "How do you track subscription lifecycle?" |
+   | `onSubscriptionPeriodChanged` | Extend validity period, reset usage quota, handle renewal failure (e.g., mark past-due, notify user) | "What happens on renewal success/failure?" |
+   | `onSubscriptionChange` | Update plan/amount/period in local record, apply prorated changes | "What changes on upgrade/downgrade?" |
+
+   **Fallback rule**: If business logic cannot be inferred from the project's existing code, do NOT silently log and skip. Instead:
+   - Generate a stub with `// ACTION REQUIRED: implement {specific business logic}` comment
+   - **Explicitly ask the developer** in the interactive session: "I cannot infer the business logic for `{handler}` — what should happen when `{event}` is received?"
+   - Do NOT treat `// ACTION REQUIRED` as acceptable output — it must be resolved before Step 6 writes code
 
 7. **Thread safety**: Recommend creating a single SDK instance and reusing it (singleton pattern).
 
