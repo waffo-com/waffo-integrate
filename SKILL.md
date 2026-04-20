@@ -162,10 +162,15 @@ Ask: "Subscription webhook events are auto-configured. Do you also need these op
 
 | Use Case | Recommended Event | Handler |
 |----------|-------------------|---------|
-| Subscription activation/cancellation | `SUBSCRIPTION_STATUS_NOTIFICATION` | `onSubscriptionStatus` |
-| Final renewal result of each period | `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION` | `onSubscriptionPeriodChanged` |
+| Subscription master status changes: first payment success→ACTIVE, cancelled→MERCHANT_CANCELLED/CHANNEL_CANCELLED, first payment fail→CLOSE | `SUBSCRIPTION_STATUS_NOTIFICATION` | `onSubscriptionStatus` |
+| Terminal status of each renewal period (period 2, 3, ...): NOT notified during retry, only after the final retry attempt. Use when you only care about per-period terminal results, not individual retries | `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION` | `onSubscriptionPeriodChanged` |
 | Subscription change (upgrade/downgrade) result | `SUBSCRIPTION_CHANGE_NOTIFICATION` | `onSubscriptionChange` |
-| Track every payment attempt (including retries) | `PAYMENT_NOTIFICATION` | `onPayment` |
+| Every payment order notification (including first payment and each renewal retry): use when you need each payment's failure reason and exact timing | `PAYMENT_NOTIFICATION` | `onPayment` |
+
+**Selection guide — PERIOD_CHANGED vs PAYMENT_NOTIFICATION:**
+- Only care about terminal result per period → `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION`
+- Need every retry's failure reason and payment timing → `PAYMENT_NOTIFICATION`
+- Both → register both (they are complementary, not duplicates)
 
 **Default recommendation**: Most subscription integrations need `SUBSCRIPTION_STATUS_NOTIFICATION` + `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION`. Only add the others if the developer has a specific need.
 

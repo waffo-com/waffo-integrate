@@ -197,7 +197,7 @@ For non-card methods (e-wallets, bank transfers, etc.) in Sandbox:
 |----|----------|---------------|
 | subscription-create | **Subscription creation + activation** | Call project's subscription creation endpoint → Playwright pays → activation webhook arrives → project handles activation (e.g., starts subscription record, local record created). |
 | subscription-inquiry | **Subscription inquiry** | Call project's subscription query endpoint → returns correct subscription status (ACTIVE after subscription-create). |
-| subscription-renewal | **Renewal webhook** | Trigger next period billing via Sandbox management page (Playwright clicks "Next period payment success") → period notification arrives → project processes renewal. |
+| subscription-renewal | **Renewal webhook** | Trigger next period billing via Sandbox management page (Playwright clicks "Next period payment success") → `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION` arrives → project processes renewal. Verify the `onSubscriptionPeriodChanged` handler was invoked. |
 | subscription-cancel | **Subscription cancel** | Call project's cancel endpoint → subscription cancelled. Verify status updated in project database. |
 
 ### Subscription — change (if project integrates subscription change)
@@ -251,25 +251,50 @@ Output the report in Markdown format:
 | Pay Methods Contracted | {full list from payMethodConfig inquiry} |
 | Pay Methods Tested | {minimum test set} |
 
+## Integration Configuration
+
+> Record the design choices made during Step 3. Only include rows relevant to integrated features.
+
+| Parameter | Value |
+|-----------|-------|
+| userTerminal | {WEB / APP} |
+| Checkout mode | {Waffo checkout / integrator checkout} |
+| Currency mode | {single-currency: USD / multi-currency: USD, IDR, ...} |
+| Subscription mode | {payment-first / service-first} — {payment-first: suspend benefits during retry; service-first: continue service during retry} |
+| Subscription events | {SUBSCRIPTION_STATUS_NOTIFICATION + SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION + ...} |
+
 ## Active Test Results
 
-| Test Item | Result | Details |
-|-----------|--------|---------|
-| order-create | PASS | checkout URL returned |
-| payment-success (CC_VISA) | PASS | balance +100, webhook received |
-| payment-failure (CC_VISA) | PASS | balance unchanged |
-| order-create-error | PASS | error message correct |
-| webhook-idempotency | PASS | no duplicate execution |
-| pay-method: CC_VISA | PASS | payment + webhook verified |
-| pay-method: DANA | PASS | e-wallet simulate success |
-| pay-method: BCA_VA | PASS | VA parameter passing verified |
-| pay-method: OVO | PASS | phone field required, verified |
-| pay-method: APPLEPAY | MANUAL | requires real device — integrator to self-test |
-| refund-success | PASS | refund initiated (via DANA, not card — K024) |
-| refund-inquiry | PASS | status correct |
-| refund-webhook | PASS | local status updated |
-| subscription-create | PASS | checkout URL + local record |
-| ... | ... | ... |
+| Test Item | Result | Order ID | Details |
+|-----------|--------|----------|---------|
+| order-create | PASS | {acquiringOrderID} | checkout URL returned |
+| payment-success (CC_VISA) | PASS | {acquiringOrderID} | balance +100, webhook received |
+| payment-failure (CC_VISA) | PASS | {acquiringOrderID} | balance unchanged |
+| order-create-error | PASS | - | error message correct |
+| webhook-idempotency | PASS | {same as payment-success} | no duplicate execution |
+| pay-method: CC_VISA | PASS | {acquiringOrderID} | payment + webhook verified |
+| pay-method: DANA | PASS | {acquiringOrderID} | e-wallet simulate success |
+| pay-method: BCA_VA | PASS | {acquiringOrderID} | VA parameter passing verified |
+| pay-method: OVO | PASS | {acquiringOrderID} | phone field required, verified |
+| pay-method: APPLEPAY | MANUAL | - | requires real device — integrator to self-test |
+| refund-success | PASS | {acquiringOrderID} | refund initiated (via DANA, not card — K024) |
+| refund-inquiry | PASS | {acquiringOrderID} | status correct |
+| refund-webhook | PASS | {acquiringOrderID} | local status updated |
+| subscription-create | PASS | {subscriptionRequest} | checkout URL + local record |
+| subscription-inquiry | PASS | {subscriptionRequest} | status ACTIVE |
+| subscription-renewal | PASS | {subscriptionRequest} | period 2 success |
+| subscription-cancel | PASS | {subscriptionRequest} | status updated |
+| ... | ... | ... | ... |
+
+## Subscription Event Coverage
+
+> Only present if subscription is integrated.
+
+| Event Type | Received | Mapped Test Cases |
+|------------|----------|-------------------|
+| SUBSCRIPTION_STATUS_NOTIFICATION | PASS | subscription-create (ACTIVE), subscription-cancel |
+| SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION | PASS | subscription-renewal |
+| PAYMENT_NOTIFICATION | N/A | 4.1-4.3 (if selected) |
 
 ## Parameter Check
 
@@ -311,17 +336,33 @@ Output the report in Markdown format:
 
 ## Pay Method Coverage
 
-| Method | Country | Type | Status | Reason |
-|--------|---------|------|--------|--------|
-| CC_VISA | - | CARD | TESTED | card representative |
-| DANA | ID | EWALLET | TESTED | ID e-wallet representative |
-| BCA_VA | ID | VA | TESTED | VA representative |
-| OVO | ID | SPECIAL | TESTED | special params (phone) |
-| GCASH | PH | EWALLET | TESTED | app-class representative |
-| MASTERCARD | - | CARD | SKIPPED | card already covered by VISA |
-| SHOPEEPAY | ID | EWALLET | SKIPPED | ID e-wallet covered by DANA |
-| APPLEPAY | - | DEVICE_PAY | MANUAL | requires real device |
-| GOOGLEPAY | - | DEVICE_PAY | MANUAL | requires real device |
+> Dynamically populated from `payMethodConfig().inquiry()` results. List every contracted method.
+
+| Method | Country | Type | Status | Order ID | Reason |
+|--------|---------|------|--------|----------|--------|
+| {method} | {country} | {type} | TESTED | {acquiringOrderID} | {role in minimum test set} |
+| {method} | {country} | {type} | SKIPPED | - | {skip reason} |
+| {method} | - | DEVICE_PAY | MANUAL | - | requires real device |
+
+**Skip reason vocabulary:**
+
+| Skip Reason | When to use |
+|-------------|-------------|
+| `redundant — {type} already covered by {method}` | Same type already tested |
+| `not checkout-available — filtered by payMethodType (K029)` | Contracted but code restricts |
+| `sandbox limitation — no simulation available` | Can't simulate in sandbox |
+| `requires real device` | APPLEPAY / GOOGLEPAY |
+
+## APP Terminal Notes
+
+> Only present if `userTerminal=APP`.
+
+Checkout must be verified inside a mobile WebView, not just desktop browser. Playwright tests are WEB-only verification.
+
+| Test Item | Verified On | Note |
+|-----------|-------------|------|
+| payment-success | Desktop (Playwright) | Must re-verify on mobile WebView before go-live |
+| subscription-create | Desktop (Playwright) | Must re-verify on mobile WebView before go-live |
 
 ## Checklist
 
@@ -415,31 +456,31 @@ Source: Merchant Integration Test Cases v1.3 + Subscription Test Cases v2.2
 
 ### Subscription Test Cases (24 items)
 
-| Case | Description | Verification | Notes |
-|------|-----------|-------------|-------|
-| 1.1 | Subscription success — all pay methods | Active | Run for each contracted pay method |
-| 1.2 | Subscription failure — all pay methods | Active | Run for each contracted pay method |
-| 1.3 | Next period payment success | Active | Renewal core |
-| 1.4 | Next period payment failure | Active | Renewal failure handling |
-| 1.5 | Channel rejection | Passive | Review error handler |
-| 1.6 | Idempotency conflict | Passive | Review ID generation, observe during test |
-| 1.7 | System unavailable | Passive | Review retry + message |
-| 1.8 | Unknown Status | Active (Exception) | Sandbox: amount 9.2/92. Verify: no close → inquiry |
-| 2.1 | Query — before payment | Active | Verify intermediate status |
-| 2.2 | Query — after payment success | Active | Verify field consistency |
-| 2.3 | Query — after payment failure | Active | Verify field consistency |
-| 3.1 | Subscription ACTIVE webhook | Active | Core |
-| 3.2 | Subscription CLOSE webhook | Active | Core |
-| 3.3 | Channel cancel webhook | Active | Core |
-| 3.4 | Merchant cancel webhook | Active | Core |
-| 3.5 | Subscription webhook signature failure | Passive | Strategy: ignore, query via inquiry |
-| 4.1 | First period payment success notification | Active | Per-period payment result |
-| 4.2 | Renewal payment success notification | Active | Per-period payment result |
-| 4.3 | Renewal payment failure notification | Active | Per-period payment result |
-| 4.4 | Payment notification signature failure | Passive | Strategy: ignore, query via inquiry |
-| 5.1 | Merchant cancel (each pay method) | Active | Core |
-| 5.6 | Cancel — system unavailable | Passive | Review retry + message |
-| 5.7 | Cancel — Unknown | Active (Exception) | Sandbox: amount 9.2/92. Verify: no close → inquiry |
+| Case | Description | Verification | Notification Type | Notes |
+|------|-----------|-------------|-------------------|-------|
+| 1.1 | Subscription success — all pay methods | Active | | Run for each contracted pay method |
+| 1.2 | Subscription failure — all pay methods | Active | | Run for each contracted pay method |
+| 1.3 | Next period payment success | Active | | Renewal core |
+| 1.4 | Next period payment failure | Active | | Renewal failure handling |
+| 1.5 | Channel rejection | Passive | | Review error handler |
+| 1.6 | Idempotency conflict | Passive | | Review ID generation, observe during test |
+| 1.7 | System unavailable | Passive | | Review retry + message |
+| 1.8 | Unknown Status | Active (Exception) | | Sandbox: amount 9.2/92. Verify: no close → inquiry |
+| 2.1 | Query — before payment | Active | | Verify intermediate status |
+| 2.2 | Query — after payment success | Active | | Verify field consistency |
+| 2.3 | Query — after payment failure | Active | | Verify field consistency |
+| 3.1 | Subscription ACTIVE webhook | Active | `SUBSCRIPTION_STATUS_NOTIFICATION` | Core |
+| 3.2 | Subscription CLOSE webhook | Active | `SUBSCRIPTION_STATUS_NOTIFICATION` | Core |
+| 3.3 | Channel cancel webhook | Active | `SUBSCRIPTION_STATUS_NOTIFICATION` | Core |
+| 3.4 | Merchant cancel webhook | Active | `SUBSCRIPTION_STATUS_NOTIFICATION` | Core |
+| 3.5 | Subscription webhook signature failure | Passive | `SUBSCRIPTION_STATUS_NOTIFICATION` | Strategy: ignore, query via inquiry |
+| 4.1 | First period payment success notification | Active | `PAYMENT_NOTIFICATION` | Per-period payment result |
+| 4.2 | Renewal payment success notification | Active | `PAYMENT_NOTIFICATION` | Per-period payment result |
+| 4.3 | Renewal payment failure notification | Active | `PAYMENT_NOTIFICATION` | Per-period payment result |
+| 4.4 | Payment notification signature failure | Passive | `PAYMENT_NOTIFICATION` | Strategy: ignore, query via inquiry |
+| 5.1 | Merchant cancel (each pay method) | Active | | Core |
+| 5.6 | Cancel — system unavailable | Passive | | Review retry + message |
+| 5.7 | Cancel — Unknown | Active (Exception) | | Sandbox: amount 9.2/92. Verify: no close → inquiry |
 
 ### Summary
 

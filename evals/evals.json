@@ -204,6 +204,32 @@
           "critical": false
         }
       ]
+    },
+    {
+      "id": 7,
+      "prompt": "I'm adding subscription billing to my Node.js project. I only care whether each billing period ultimately succeeded or failed — I don't need to know about individual retry attempts. Which webhook events should I register?",
+      "expected_output": "Should recommend SUBSCRIPTION_STATUS_NOTIFICATION + SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION. Should explain PERIOD_CHANGED gives terminal-per-period notification without retry noise. Should mention PAYMENT_NOTIFICATION as an option for those who need retry details but not push it as the primary recommendation.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "recommends_period_changed",
+          "type": "output_contains",
+          "check": "Recommends SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION for per-period terminal status",
+          "critical": true
+        },
+        {
+          "name": "recommends_status_notification",
+          "type": "output_contains",
+          "check": "Also recommends SUBSCRIPTION_STATUS_NOTIFICATION for lifecycle events (activation/cancellation)",
+          "critical": true
+        },
+        {
+          "name": "explains_period_vs_payment_difference",
+          "type": "output_contains",
+          "check": "Explains that PERIOD_CHANGED only notifies terminal status (not retries), while PAYMENT_NOTIFICATION includes every retry attempt",
+          "critical": true
+        }
+      ]
     }
   ]
 }

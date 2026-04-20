@@ -158,6 +158,10 @@ Maintain a `test_state` dict across test cases:
 
 When re-running after fix, check if dependent state needs refresh (e.g., if order-create was fixed, payment-success needs a new order).
 
+When generating the report, use `test_state` order IDs to populate the `Order ID` column in:
+- Active Test Results: each test item maps to its `acquiringOrderID` or `subscriptionRequest`
+- Pay Method Coverage: each TESTED method maps to the order used for that payment
+
 **Fix log format (included in report):**
 ```
 Test: payment-success
@@ -201,6 +205,14 @@ Before generating any test, read the project's code to understand:
 
    Record answers for the report. If developer doesn't know (e.g., timeout), try to find the value in project code (HTTP client config, DNS resolver config).
 
+9. **Integration configuration** (from Step 3 answers or inferred from project code):
+   - `userTerminal`: WEB or APP (read from order/subscription create calls)
+   - Subscription mode: payment-first or service-first (read from SDK config or handler comments)
+   - Checkout mode: Waffo checkout (no `payMethodType`) or integrator checkout (has `payMethodType`)
+   - Currency mode: single-currency (hardcoded) or multi-currency (parameter)
+   - Selected subscription events: which handlers are registered in webhook setup
+   These values populate the "Integration Configuration" section of the report.
+
 Output a summary before proceeding:
 ```
 Context Discovery:
@@ -215,6 +227,11 @@ Context Discovery:
   Credentials:       Found in database options (Sandbox)
   Features:          Order Create + Webhook (no Cancel/Refund/Subscription)
   Applicable tests:  order-create, payment-success, payment-failure, order-create-error, webhook-idempotency, pay-method-coverage
+  Terminal:          WEB
+  Sub mode:          payment-first (benefits suspended during retry)
+  Checkout mode:     Waffo checkout (no payMethodType in order create)
+  Currency:          single-currency (USD)
+  Sub events:        SUBSCRIPTION_STATUS_NOTIFICATION + SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION
   Go-Live:           Q1=15s ✓, Q2=60s ✓, Q3=Singapore ✓, Q4=N/A, Q5=N/A
 ```
 
