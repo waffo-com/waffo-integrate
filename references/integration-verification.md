@@ -202,6 +202,15 @@ Before generating any test, read the project's code to understand:
    | Q3 | "服务器部署在哪个地区？" | 大陆 → 跨境延迟风险，建议 SDWAN/VPN/专线 |
    | Q4 | "有集成 WeChat Pay 吗？" | 有 → 上线前需提供生产域名给 Waffo 做渠道注册 |
    | Q5 | "有集成 Apple Pay 吗？checkout 页面是否在 iframe 里？" | Apple Pay + iframe → BLOCK，Apple Pay 不支持 iframe 内调用 |
+   | Q6 | "你们的产品有手机 APP 吗？(iOS/Android)" | 有 APP → Q7 |
+   | Q7 | "APP 里打开支付页面是怎么加载的？(外跳系统浏览器 / 端内 WebView / 其他)" | WebView → userTerminal 必须传 APP，WeChat Pay + Apple Pay 成为必测项 |
+   | Q8 | "APP 端的订单创建接口是否传了 `userTerminal=APP`？" | 没传 → FIXABLE_CODE，部分支付渠道 (WeChat Pay) 在 APP 场景下行为不同 |
+
+   **APP Terminal Assessment Logic:**
+   - Q6=No → skip Q7/Q8, report "APP Terminal: N/A (no mobile app)"
+   - Q6=Yes + Q7=WebView → WeChat Pay and Apple Pay become REQUIRED test items (not MANUAL/SKIP). Check code for `userTerminal: 'APP'` in order/subscription create. If missing → FIXABLE_CODE.
+   - Q6=Yes + Q7=External browser → WeChat Pay still REQUIRED (opens in browser's WeChat SDK). Apple Pay is MANUAL (only available in Safari/WebView).
+   - For APPLEPAY/GOOGLEPAY testing in APP context: generate QR code from checkout URL → merchant scans with phone → tests on real device (see §4 APP Terminal Assessment).
 
    Record answers for the report. If developer doesn't know (e.g., timeout), try to find the value in project code (HTTP client config, DNS resolver config).
 
@@ -232,6 +241,8 @@ Context Discovery:
   Checkout mode:     Waffo checkout (no payMethodType in order create)
   Currency:          single-currency (USD)
   Sub events:        SUBSCRIPTION_STATUS_NOTIFICATION + SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION
+  APP terminal:      Q6=Yes (iOS+Android), Q7=WebView, Q8=APP passed ✓
+  APP mandatory:     WeChat Pay (REQUIRED), Apple Pay (REQUIRED — QR code testing)
   Go-Live:           Q1=15s ✓, Q2=60s ✓, Q3=Singapore ✓, Q4=N/A, Q5=N/A
 ```
 

@@ -107,6 +107,10 @@ After feature selection, ask these questions — their answers affect code gener
 1. **User terminal type**: "What type of client will users pay from?"
    - `WEB` — PC/desktop browser
    - `APP` — Mobile app or tablet (WebView inside native app)
+   - **If APP**: Follow up with "How does the APP load the checkout page? (external browser / in-app WebView / other)"
+     - WebView → `userTerminal` MUST be `'APP'`. WeChat Pay and Apple Pay become mandatory integration + test items.
+     - External browser → `userTerminal` should still be `'APP'` (the payment originates from an APP context). WeChat Pay is still mandatory; Apple Pay is recommended.
+   - **APP implications for code generation**: If APP terminal, the generated code must default `userTerminal` to `'APP'` (not `'WEB'`), and the minimum pay method set in Step 7 must include WeChat Pay (if contracted) and Apple Pay (if contracted) as REQUIRED, not MANUAL.
 
 2. **Checkout pay method selection**: "Do users select payment method on YOUR checkout page, or on Waffo's checkout page?"
    - **Integrator's checkout** → must pass `payMethodType` and/or `payMethodName` in order create
@@ -384,3 +388,10 @@ Read `references/integration-verification.md` for the complete verification prot
 **Phases**: A (core tests) → B1 (card) → B2 (non-card) → C1 (refund) → C2 (subscription) → D (passive verification + report)
 
 **Also reads**: `references/acceptance-criteria.md` (test cards, Playwright scripts, report template), `references/sandbox-knowledge.md` (Sandbox quirks K024-K030), `references/business-validation.md` (passive verification checklist)
+
+**APP terminal + QR code testing**: If Context Discovery determines the merchant has an APP (Q6=Yes), APPLEPAY/GOOGLEPAY/WECHATPAY cannot be tested via desktop Playwright alone. For these methods:
+1. Create the order via the project's API to get a checkout URL
+2. Generate a QR code: `qrencode -t UTF8 "{checkoutURL}"` (prints in terminal) or `qrencode -o /tmp/checkout-qr.png "{checkoutURL}"` (saves PNG)
+3. Present the QR code to the integrator and guide them through the on-device payment flow
+4. After integrator confirms, verify webhook delivery and business logic execution
+See `references/acceptance-criteria.md` §4 "APP Terminal Assessment" for the full protocol.

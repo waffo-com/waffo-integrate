@@ -353,16 +353,51 @@ Output the report in Markdown format:
 | `sandbox limitation — no simulation available` | Can't simulate in sandbox |
 | `requires real device` | APPLEPAY / GOOGLEPAY |
 
-## APP Terminal Notes
+## APP Terminal Assessment
 
-> Only present if `userTerminal=APP`.
+> Always present. Records whether merchant has a mobile APP and its implications.
 
-Checkout must be verified inside a mobile WebView, not just desktop browser. Playwright tests are WEB-only verification.
+### Assessment Result
 
-| Test Item | Verified On | Note |
-|-----------|-------------|------|
-| payment-success | Desktop (Playwright) | Must re-verify on mobile WebView before go-live |
-| subscription-create | Desktop (Playwright) | Must re-verify on mobile WebView before go-live |
+| Question | Answer |
+|----------|--------|
+| Has mobile APP? (Q6) | {Yes (iOS+Android) / Yes (iOS only) / Yes (Android only) / No} |
+| Checkout loading mode (Q7) | {WebView / External browser / N/A} |
+| `userTerminal=APP` passed? (Q8) | {Yes / No → FIXABLE_CODE / N/A} |
+
+### APP-Mandatory Payment Methods
+
+> If Q6=Yes: these methods become REQUIRED (not MANUAL/SKIP). If Q6=No: this section shows "N/A — no mobile APP".
+
+| Method | Status | Reason |
+|--------|--------|--------|
+| WECHATPAY | {REQUIRED / N/A} | WeChat Pay behaves differently in APP WebView vs desktop; must verify in-app flow |
+| APPLEPAY | {REQUIRED / N/A} | Apple Pay only works on iOS Safari or WebView; must test on real device |
+| GOOGLEPAY | {RECOMMENDED / N/A} | Google Pay works on Android Chrome or WebView; recommended for Android APP |
+
+### QR Code Testing Protocol (for APPLEPAY/GOOGLEPAY/WECHATPAY)
+
+When a payment method requires real device testing:
+
+1. Create an order via the project's API endpoint
+2. Get the checkout URL from the response
+3. Generate QR code: `qrencode -t UTF8 "{checkoutURL}"` (terminal) or `qrencode -o /tmp/checkout-qr.png "{checkoutURL}"` (PNG file)
+4. Present QR code to integrator: "请用手机扫描此二维码，在手机上打开收银台页面并完成 {method} 支付测试"
+5. After integrator confirms payment completed on device → verify webhook received + business logic executed
+6. Record result: PASS (device-tested) / FAIL (with reason)
+
+**If `qrencode` is not installed:** Output the checkout URL directly and instruct: "请在手机浏览器中打开此链接测试"
+
+### Desktop-Only Verification Note
+
+Playwright tests verify WEB terminal behavior only. If merchant has APP:
+
+| Test Item | Desktop Verified | APP Re-verification Required |
+|-----------|-----------------|------------------------------|
+| payment-success | ✓ (Playwright) | Yes — before go-live |
+| subscription-create | ✓ (Playwright) | Yes — before go-live |
+| WeChat Pay | N/A (desktop) | REQUIRED — must test in APP WebView |
+| Apple Pay | N/A (desktop) | REQUIRED — must test on iOS device |
 
 ## Checklist
 
