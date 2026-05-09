@@ -102,7 +102,7 @@ Use specific amounts to trigger exception scenarios in Sandbox:
 
 **Impact on Testing**: Phase B pay-method-coverage may select DANA as the e-wallet representative, but if the project hardcodes card-only `payMethodType`, DANA won't appear on checkout and the test will fail — not because of a Sandbox issue, but because the project code restricts it.
 
-**Pre-flight Check**: During Context Discovery, cross-compare:
+**Pre-flight Check**: During Project Integration Surface discovery, cross-compare:
 1. `payMethodConfig().inquiry()` result → what the merchant **can** use
 2. Project code's `payMethodType` / `payMethodName` in create calls → what checkout **will show**
 
