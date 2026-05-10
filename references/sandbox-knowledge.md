@@ -14,6 +14,12 @@ This file is loaded during **Step 7** test execution only. Contains Sandbox-spec
 
 **Impact on Testing**: Phase C1 (Refund) should create the source payment using an e-wallet method. If the merchant **only has card + APPLEPAY/GOOGLEPAY** (no e-wallet contracted), refund-webhook test must be marked **SKIP** — there is no way to trigger `REFUND_NOTIFICATION` in Sandbox. In this case, verify refund status via `refund().inquiry()` API polling instead.
 
+**Required retry behavior**:
+- Prefer a paid DANA order for `refund-webhook` when DANA is contracted and Phase B2 paid successfully.
+- If the first paid e-wallet refund is rejected by refund rules, continue to the next paid e-wallet before falling back to card.
+- Do not mark `refund-webhook` as SKIP/WAFFO_SUPPORT_REQUIRED until the e-wallet attempts and their error codes are recorded.
+- Known observation: QRIS and OVO can return `A0014 Order cannot be refunded due to refund rules` in Sandbox, while DANA may refund successfully and deliver `REFUND_NOTIFICATION`.
+
 ---
 
 ## K018: Subscription Renewal Simulation
@@ -138,3 +144,23 @@ await page.getByRole('button', { name: /cancel subscription/i }).click();
 ```
 
 **Note**: Always use case-insensitive regex matchers to handle trailing punctuation and case variations. After clicking, wait 3-5s for webhook delivery before verifying.
+
+---
+
+## K031: OVO Checkout Requires Localized UI Handling
+
+**Symptom**: OVO order is created and the checkout page opens, but the order remains `AUTHORIZATION_REQUIRED`.
+
+**Root Cause**: The OVO Sandbox checkout may require a phone number and uses Indonesian labels/buttons. English-only selectors miss the flow.
+
+**How to Complete**:
+1. Open the OVO checkout URL.
+2. Fill `input[name="userInfo.userPhone"]`, `input[autocomplete="tel"]`, or `input[type="tel"]` with an Indonesian-style phone value such as `81234567890`.
+3. Check required agreement/save checkboxes when present (`needAgreeTerms`, `needSave`).
+4. Click the localized pay button, commonly `Bayar`.
+5. On the simulator page, click `Payment succeeded`.
+6. Poll inquiry until `orderStatus=PAY_SUCCESS`, then verify webhook/business state.
+
+**Loop Rule**: If a non-card method stays `AUTHORIZATION_REQUIRED`, inspect visible input attributes and localized button text before marking the method failed. A missing English selector is `FIXABLE_CODE`, not Waffo support.
+
+**Parameter Note**: Do not invent object-shaped `payMethodProperties` for OVO unless the active API contract requires it. If a phone number is needed by the checkout page, pass it through the project/user info or fill it on the checkout page, then confirm with inquiry.

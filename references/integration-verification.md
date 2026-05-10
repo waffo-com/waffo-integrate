@@ -137,7 +137,23 @@ Execute test → FAIL → Classify failure → Fix if possible → Rebuild → R
 - Each fix must be **minimal and targeted** — do not refactor
 - **Track all fixes** internally; include a concise summary in the Waffo-facing report only when it explains integration maturity
 - A failed attempt is not final until logs, request payload, inquiry result, checkout page state, and project-side persistence have been checked
+- For non-card checkout stuck in `AUTHORIZATION_REQUIRED`, inspect the live checkout page before classifying the result: collect body text, visible inputs (`name`/`id`/`type`/`autocomplete`/placeholder), checkboxes, buttons, and simulator controls. Handle localized labels and required fields before marking it unresolved.
+- For `refund-webhook`, do not fall back to card refunds while any paid e-wallet source exists. Try paid e-wallet sources first and continue across same-class alternatives when one method is rejected by refund rules.
 - If 3 attempts cannot close the issue, mark `WAFFO_SUPPORT_REQUIRED` and contact Waffo technical support with a support package
+
+### Pre-Report Non-PASS Gate
+
+Before Phase D writes the final report, every `FAIL`, `PARTIAL`, `WAFFO_SUPPORT_REQUIRED`, or `SKIP_WITH_REASON` item must answer all of these questions in the internal fix log. If any answer is "no" or "unknown", keep investigating instead of reporting the item as final.
+
+| Question | Required Evidence |
+|----------|-------------------|
+| Was the latest API/inquiry state checked? | Request ID, acquiring ID, status, response code/message |
+| Was the checkout or management UI inspected when UI could affect the result? | Page text plus visible input/button/simulator details |
+| Were required localized fields and buttons handled? | Filled field names and clicked button/simulator text |
+| Were same-class alternatives tried when the failure is method/channel-specific? | Attempts for comparable pay methods, such as DANA before card refund fallback |
+| Is the remaining blocker outside local integration/test automation? | Reason it is not `FIXABLE_CODE` or `FIXABLE_INFRA` |
+
+If a later attempt turns the item PASS, keep a concise "Failure Loop Findings" section in the Waffo-facing report explaining the root cause and retest IDs.
 
 
 ### Waffo Support Escalation Package
@@ -324,6 +340,8 @@ Read `references/acceptance-criteria.md` for the full criteria definitions. The 
 | refund-inquiry | Project refund query endpoint → returns correct refund status |
 | refund-webhook | Refund notification arrives → project updates order status |
 
+Refund execution rule: `refund-webhook` must use a paid e-wallet source when any contracted e-wallet was successfully paid in Phase B2. Prefer DANA first in Sandbox, then other paid e-wallets, and only fall back to card when there is no paid e-wallet source. If an e-wallet returns `A0014` or another refund-rule error, record that attempt and continue to the next paid e-wallet before classifying the case.
+
 **Multi-currency (if developer answered "multi-currency" in Step 3 Q5):**
 
 | Test Item | What to verify |
@@ -446,7 +464,7 @@ Pay Method Test Set (6 of 15 contracted):
 
 For each method in the minimum test set:
 - **Card** → map to test cards in `references/acceptance-criteria.md` §1. Execute a full payment-success cycle.
-- **Non-card** → create order with that pay method, open checkout URL with Playwright, look for Sandbox "simulate success" button. If found → click and verify. If not found → SKIP with reason.
+- **Non-card** → create order with that pay method, open checkout URL with Playwright, inspect required inputs/checkboxes/buttons, fill method-specific fields, click the localized pay/continue button, then click Sandbox simulator success if present. If it stays `AUTHORIZATION_REQUIRED`, run Loop Mode diagnostics before marking unresolved; do not stop at the first missing English selector.
 - **APPLEPAY / GOOGLEPAY** → mark MANUAL. Inform integrator: "Create an order, open checkout URL on your phone, complete payment using the device's native payment flow."
 
 ---
