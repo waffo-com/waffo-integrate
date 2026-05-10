@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.1] - 2026-05-10
+
+### Fixed
+
+- Strengthened non-card Sandbox failure loops so methods stuck in `AUTHORIZATION_REQUIRED` must inspect checkout inputs, checkboxes, localized buttons, and simulator controls before being reported as non-PASS.
+- Added OVO checkout guidance for required phone input, `Bayar`, and `Payment succeeded` Sandbox simulation.
+- Tightened refund webhook verification to prefer paid e-wallet sources, continue across e-wallet alternatives when refund rules reject a method, and avoid falling back to card refunds while an e-wallet source is available.
+
 ## [1.3.0] - 2026-04-24
 
 ### Added
