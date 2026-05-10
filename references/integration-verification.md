@@ -45,7 +45,8 @@ Phase C1 — Refund (~10 tool calls):
 
 Phase C2 — Subscription (~15 tool calls):
   subscription-create → inquiry → renewal → cancel
-  subscription-change → change-inquiry (if integrated)
+  notification tests: SUBSCRIPTION_STATUS_NOTIFICATION, SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION, PAYMENT_NOTIFICATION
+  subscription-change → change-inquiry → SUBSCRIPTION_CHANGE_NOTIFICATION (if upgrade/downgrade integrated)
   ✓ Checkpoint: output Phase C2 results
 
 Phase D — Passive Verification + Report (~5 tool calls):
@@ -124,15 +125,51 @@ Execute test → FAIL → Classify failure → Fix if possible → Rebuild → R
 
 | Type | Examples | Action |
 |------|---------|--------|
-| `FIXABLE_CODE` | Wrong field name, missing field, logic error, type mismatch | Diagnose → Edit fix → rebuild → re-run |
-| `FIXABLE_INFRA` | Tunnel down, server not running, config missing | Restore infra → re-run (no code change) |
-| `NOT_FIXABLE` | Sandbox limitation, needs user architectural decision | Record SKIP/BLOCKED, ask user if needed |
+| `FIXABLE_CODE` | Wrong field name, missing field, logic error, type mismatch | Diagnose → edit fix → rebuild → re-run |
+| `FIXABLE_INFRA` | Tunnel down, server not running, config missing | Restore infra → re-run without code changes |
+| `WAFFO_SUPPORT_REQUIRED` | Repeated Sandbox/API/channel behavior cannot be explained locally | Prepare support package and contact Waffo technical support |
+| `MANUAL_REQUIRED` | Apple Pay / Google Pay / APP WebView flow needs a real device | Generate order/QR/link, guide device test, then verify webhook/business state |
+| `SKIP_WITH_REASON` | Contracted but not checkout-available, duplicate representative, known Sandbox limitation | Record reason, evidence, and next step; do not hide it as PASS |
 
 **Loop rules:**
 - Max **3 fix attempts** per test case
 - After fix: only re-run the **failed test + its dependents** (not all tests)
 - Each fix must be **minimal and targeted** — do not refactor
-- **Track all fixes** — record root cause + fix location for the report
+- **Track all fixes** internally; include a concise summary in the Waffo-facing report only when it explains integration maturity
+- A failed attempt is not final until logs, request payload, inquiry result, checkout page state, and project-side persistence have been checked
+- For non-card checkout stuck in `AUTHORIZATION_REQUIRED`, inspect the live checkout page before classifying the result: collect body text, visible inputs (`name`/`id`/`type`/`autocomplete`/placeholder), checkboxes, buttons, and simulator controls. Handle localized labels and required fields before marking it unresolved.
+- For `refund-webhook`, do not fall back to card refunds while any paid e-wallet source exists. Try paid e-wallet sources first and continue across same-class alternatives when one method is rejected by refund rules.
+- If 3 attempts cannot close the issue, mark `WAFFO_SUPPORT_REQUIRED` and contact Waffo technical support with a support package
+
+### Pre-Report Non-PASS Gate
+
+Before Phase D writes the final report, every `FAIL`, `PARTIAL`, `WAFFO_SUPPORT_REQUIRED`, or `SKIP_WITH_REASON` item must answer all of these questions in the internal fix log. If any answer is "no" or "unknown", keep investigating instead of reporting the item as final.
+
+| Question | Required Evidence |
+|----------|-------------------|
+| Was the latest API/inquiry state checked? | Request ID, acquiring ID, status, response code/message |
+| Was the checkout or management UI inspected when UI could affect the result? | Page text plus visible input/button/simulator details |
+| Were required localized fields and buttons handled? | Filled field names and clicked button/simulator text |
+| Were same-class alternatives tried when the failure is method/channel-specific? | Attempts for comparable pay methods, such as DANA before card refund fallback |
+| Is the remaining blocker outside local integration/test automation? | Reason it is not `FIXABLE_CODE` or `FIXABLE_INFRA` |
+
+If a later attempt turns the item PASS, keep a concise "Failure Loop Findings" section in the Waffo-facing report explaining the root cause and retest IDs.
+
+
+### Waffo Support Escalation Package
+
+When a case is `WAFFO_SUPPORT_REQUIRED`, collect this package before contacting Waffo technical support:
+
+| Field | Required Evidence |
+|-------|-------------------|
+| Merchant context | MID, environment, SDK language/version, feature under test |
+| Payment context | payMethodName, payMethodType, country, currency, amount, terminal, checkout mode |
+| Identifiers | paymentRequestId, acquiringOrderId, refundRequestId, subscriptionRequest, subscriptionId as applicable |
+| API evidence | sanitized request payload, response code/msg, inquiry result, webhook payload summary if received |
+| UI evidence | checkout URL, page text/screenshot, clicked simulator/device action, timestamp |
+| Retry history | attempts 1-3, fixes tried, commands/tests re-run, remaining symptom |
+
+Do not downgrade an unexplained contracted method failure to SKIP merely to finish the report.
 
 **Rebuild protocol (after code fix):**
 ```bash
@@ -159,10 +196,10 @@ Maintain a `test_state` dict across test cases:
 When re-running after fix, check if dependent state needs refresh (e.g., if order-create was fixed, payment-success needs a new order).
 
 When generating the report, use `test_state` order IDs to populate the `Order ID` column in:
-- Active Test Results: each test item maps to its `acquiringOrderID` or `subscriptionRequest`
-- Pay Method Coverage: each TESTED method maps to the order used for that payment
+- Active Test Results: populate split ID columns (`Request ID`, `Acquiring ID (A单)`, `Subscription Request`, `Subscription ID`, `Refund Request ID`, `Change Request / Key`) instead of mixing IDs in one column
+- Pay Method Coverage: each TESTED method maps to the request/acquiring order used for that payment
 
-**Fix log format (included in report):**
+**Internal fix log format:**
 ```
 Test: payment-success
   Attempt 1: FAIL — webhook not processed, order stuck in pending
@@ -182,7 +219,7 @@ Before generating any test, read these reference files:
 
 ---
 
-## Context Discovery (MANDATORY first step)
+## Project Integration Surface (MANDATORY first step)
 
 Before generating any test, read the project's code to understand:
 
@@ -222,9 +259,11 @@ Before generating any test, read the project's code to understand:
    - Selected subscription events: which handlers are registered in webhook setup
    These values populate the "Integration Configuration" section of the report.
 
+10. **Waffo APIs Exercised** — record every Waffo SDK/API operation actually used during verification, such as `order().create()`, `order().inquiry()`, `order().refund()`, `refund().inquiry()`, `subscription().create()`, `subscription().manage()`, `subscription().cancel()`, `payMethodConfig().inquiry()`, and `merchantConfig().inquiry()`. These are Waffo APIs, distinct from the project HTTP endpoints.
+
 Output a summary before proceeding:
 ```
-Context Discovery:
+Project Integration Surface:
   Order endpoint:    POST /api/waffo/pay (auth: JWT)
   Webhook endpoint:  POST /api/waffo/webhook (no auth, signature verified)
   Business logic:    Webhook success → RechargeWaffo() → add balance
@@ -240,11 +279,32 @@ Context Discovery:
   Sub mode:          payment-first (benefits suspended during retry)
   Checkout mode:     Waffo checkout (no payMethodType in order create)
   Currency:          single-currency (USD)
-  Sub events:        SUBSCRIPTION_STATUS_NOTIFICATION + SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION
+  Sub events:        SUBSCRIPTION_STATUS_NOTIFICATION + SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION + PAYMENT_NOTIFICATION
   APP terminal:      Q6=Yes (iOS+Android), Q7=WebView, Q8=APP passed ✓
   APP mandatory:     WeChat Pay (REQUIRED), Apple Pay (REQUIRED — QR code testing)
+  Waffo APIs:        order.create, order.inquiry, refund.inquiry, payMethodConfig.inquiry
   Go-Live:           Q1=15s ✓, Q2=60s ✓, Q3=Singapore ✓, Q4=N/A, Q5=N/A
 ```
+
+---
+
+## Integration Test Plan Gate
+
+Before Phase A, publish a compact plan that maps the project's integrated Waffo features to required and optional verification items. This is a project-integration gate, not a full SDK release matrix.
+
+| Integrated Feature | Required Tests | Optional Tests | Gate Result |
+|--------------------|----------------|----------------|-------------|
+| Order payment | order-create, payment-success, payment-failure, order-create-error, webhook-idempotency, pay-method-coverage | cancel/capture if exposed by project | READY / FIX_PLAN |
+| Refund | refund-success, refund-inquiry, refund-webhook | partial refund if project supports it | READY / FIX_PLAN / N/A |
+| Subscription | subscription-create, subscription-inquiry, subscription-renewal, subscription-cancel, subscription-event-status, subscription-event-period-changed, subscription-event-payment | subscription refund if exposed by project | READY / FIX_PLAN / N/A |
+| Subscription upgrade/downgrade | subscription-change, subscription-change-inquiry, subscription-event-change | change-after-renewal scenario | READY / FIX_PLAN / N/A |
+| Config query | merchantConfig/payMethodConfig endpoint or SDK path used by project | - | READY / FIX_PLAN / N/A |
+
+Gate rules:
+- If subscription is integrated, `SUBSCRIPTION_STATUS_NOTIFICATION`, `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION`, and `PAYMENT_NOTIFICATION` must appear as explicit test rows.
+- If subscription upgrade/downgrade is not integrated, `subscription-change`, `subscription-change-inquiry`, and `SUBSCRIPTION_CHANGE_NOTIFICATION` stay `N/A`, not FAIL.
+- If upgrade/downgrade is integrated, those three change items are required and must have IDs/evidence in the report.
+- Do not start Phase A until every integrated feature is `READY` or explicitly `N/A` with a reason.
 
 ---
 
@@ -280,6 +340,8 @@ Read `references/acceptance-criteria.md` for the full criteria definitions. The 
 | refund-inquiry | Project refund query endpoint → returns correct refund status |
 | refund-webhook | Refund notification arrives → project updates order status |
 
+Refund execution rule: `refund-webhook` must use a paid e-wallet source when any contracted e-wallet was successfully paid in Phase B2. Prefer DANA first in Sandbox, then other paid e-wallets, and only fall back to card when there is no paid e-wallet source. If an e-wallet returns `A0014` or another refund-rule error, record that attempt and continue to the next paid e-wallet before classifying the case.
+
 **Multi-currency (if developer answered "multi-currency" in Step 3 Q5):**
 
 | Test Item | What to verify |
@@ -294,13 +356,17 @@ Read `references/acceptance-criteria.md` for the full criteria definitions. The 
 | subscription-inquiry | Project subscription query endpoint → returns correct status |
 | subscription-renewal | Next period notification arrives → project processes renewal |
 | subscription-cancel | Project cancel endpoint → subscription cancelled → status updated |
+| subscription-event-status | `SUBSCRIPTION_STATUS_NOTIFICATION` received and processed for subscription activation/cancel/status change |
+| subscription-event-period-changed | `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION` received and processed for renewal period change |
+| subscription-event-payment | `PAYMENT_NOTIFICATION` received for subscription first payment or renewal payment attempt; routed by `paymentInfo.productName` so one-time fulfillment does not process subscription billing |
 
 **Subscription — change (if integrated):**
 
 | Test Item | What to verify |
 |-----------|----------------|
-| subscription-change | Project change endpoint → change succeeds |
-| subscription-change-inquiry | Project change query endpoint → returns correct change status |
+| subscription-change | Project endpoint backed by `POST /api/v1/subscription/change` → change succeeds |
+| subscription-change-inquiry | Project endpoint backed by `POST /api/v1/subscription/change/inquiry` → returns correct change status |
+| subscription-event-change | `SUBSCRIPTION_CHANGE_NOTIFICATION` received and processed |
 
 ---
 
@@ -321,8 +387,9 @@ order-create → payment-failure
 order-create-error (independent)
 payment-success → pay-method-coverage (minimum test set from Pay Method Discovery)
 payment-success → refund-success → refund-inquiry, refund-webhook        [Phase C1]
-subscription-create → subscription-inquiry, subscription-renewal, subscription-cancel  [Phase C2]
-subscription-change → subscription-change-inquiry                        [Phase C2]
+subscription-create → subscription-inquiry, subscription-event-status, subscription-event-payment
+subscription-renewal → subscription-event-period-changed, subscription-event-payment, subscription-cancel  [Phase C2]
+subscription-change → subscription-change-inquiry, subscription-event-change  [Phase C2, only if upgrade/downgrade integrated]
 ```
 
 ---
@@ -397,7 +464,7 @@ Pay Method Test Set (6 of 15 contracted):
 
 For each method in the minimum test set:
 - **Card** → map to test cards in `references/acceptance-criteria.md` §1. Execute a full payment-success cycle.
-- **Non-card** → create order with that pay method, open checkout URL with Playwright, look for Sandbox "simulate success" button. If found → click and verify. If not found → SKIP with reason.
+- **Non-card** → create order with that pay method, open checkout URL with Playwright, inspect required inputs/checkboxes/buttons, fill method-specific fields, click the localized pay/continue button, then click Sandbox simulator success if present. If it stays `AUTHORIZATION_REQUIRED`, run Loop Mode diagnostics before marking unresolved; do not stop at the first missing English selector.
 - **APPLEPAY / GOOGLEPAY** → mark MANUAL. Inform integrator: "Create an order, open checkout URL on your phone, complete payment using the device's native payment flow."
 
 ---
@@ -410,7 +477,7 @@ For payment-success, payment-failure, webhook-idempotency: after the webhook is 
 - **API**: Call the project's query endpoints to verify state changes
 - **Logs**: Check backend logs for expected log entries
 
-The specific checks depend on what Context Discovery found in the webhook handler code.
+The specific checks depend on what Project Integration Surface found in the webhook handler code.
 
 ---
 
@@ -421,11 +488,11 @@ After all test items are executed, evaluate:
 | # | Check | Evaluate |
 |---|-------|----------|
 | C1 | All applicable tests executed | Were any test items skipped that should have been tested? |
-| C2 | Pay method coverage | Cross-check against Context Discovery's `payMethodConfig().inquiry()` result. List **every** contracted method with final status: TESTED / SKIPPED (+ reason) / MANUAL. Flag any method that is contracted + checkout-available but has no test result and no skip reason. |
+| C2 | Pay method coverage | Cross-check against Project Integration Surface's `payMethodConfig().inquiry()` result. List **every** contracted method with final status: TESTED / SKIPPED (+ reason) / MANUAL. Flag any method that is contracted + checkout-available but has no test result and no skip reason. |
 | C3 | Business logic verified | Was the project's actual behavior checked (not just API response)? |
 | C4 | Redirect URLs verified | Were success/failure redirect URLs asserted from checkout result page? |
 | C5 | Webhook Content-Type | Webhook response sets `Content-Type: application/json`? SDK only generates responseBody — the web framework default is usually `text/plain`. Check the actual response header during active tests (e.g., inspect webhook call logs or curl the endpoint). If wrong → `FIXABLE_CODE`, apply Loop Mode fix. |
-| C6 | Parameter quality | During active tests, inspect API request parameters: (1) `orderDescription` is specific, not "test" placeholder; (2) `goodsName`/`goodsUrl` or `appName` provided; (3) `userEmail` format valid, no "test" in address; (4) `userTerminal` matches actual terminal type (WEB/APP). If any wrong → `FIXABLE_CODE`. |
+| C6 | Parameter quality | During active tests, inspect API request parameters: (1) `orderDescription` is specific, not "test" placeholder; (2) `goodsName` is present; (3) at least one of `goodsUrl` or `appName` is present unless explicit premium merchant exemption exists; default is non-premium/no exemption; (4) if the merchant has no App, `goodsUrl` is required and `appName` should not be invented; (5) `goodsUrl` is a product detail page or official website URL, not an image URL; (6) `appName` is only for App merchants and must be the App Store / Google Play listed app name, not a package ID or placeholder; (7) `userEmail` format valid, no "test" in address; (8) `userTerminal` matches actual terminal type (WEB/APP). If a required quality check fails → `FIXABLE_CODE`; if exemption is claimed, record the explicit confirmation evidence in the report. |
 | C7 | Data persistence | After payment-success: verify `acquiringOrderID` stored in project database. After refund-success (if applicable): verify `refundRequestId` returned to caller and persisted. These IDs are required for webhook matching and inquiry operations. |
 | C8 | orderExpiredAt format | Only if project sets custom checkout expiry: verify `orderExpiredAt` is ISO 8601 UTC+0 format ending with `Z`, and value is in the future. Skip if default expiry (4h). |
 
@@ -460,18 +527,35 @@ Passive Verification (Code Review):
 
 Include the full Code Review results in the verification report under "Passive Verification" section. Fixed items should show both the original finding and the fix applied.
 
+## Skill Compliance Review (MANDATORY before report finalization)
+
+Before publishing the report, review the test state against this skill:
+
+| Check | Requirement |
+|-------|-------------|
+| Contracted methods | Every active contracted method from `payMethodConfig().inquiry()` appears in Pay Method Coverage |
+| Non-PASS handling | Every SKIP/MANUAL/WAFFO_SUPPORT_REQUIRED has evidence, IDs if available, and a next step |
+| Full verification | All applicable active, exception, passive, refund, subscription, and APP/device items are complete or explicitly classified |
+| Subscription notification coverage | For subscription integrations, `SUBSCRIPTION_STATUS_NOTIFICATION`, `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION`, and `PAYMENT_NOTIFICATION` are explicit test rows; `SUBSCRIPTION_CHANGE_NOTIFICATION` is explicit when upgrade/downgrade is integrated |
+| Report audience | Main report is suitable for Waffo technical support and excludes command history/noisy execution logs |
+| Report language | If the user and AI interacted in Chinese, report body is Chinese; otherwise English |
+| Source discipline | API assertions cite OpenAPI or Waffo developer docs, not marketing pages |
+
+If any check fails, fix the report or continue verification before producing the verdict.
+
 ---
 
 ## Verification Report
 
 Generate report per `references/acceptance-criteria.md` §4 template. Include:
-- Test item results (PASS/FAIL/SKIP per item, using descriptive names)
-- Pay method coverage: list every contracted method with final status (TESTED/SKIPPED/MANUAL), cross-checked against `payMethodConfig().inquiry()` result from Context Discovery
-- Fixes applied during testing (if Loop Mode was triggered, including passive verification fixes)
-- Checklist results (C1-C8)
-- Go-Live Readiness: only items relevant to this project based on Q1-Q5 answers from Context Discovery
-- Overall verdict (FULL / CONDITIONAL / INCOMPLETE)
-- Failed items with details
-- Skipped items with reasons
+- Test item results (PASS/FAIL/SKIP/MANUAL/WAFFO_SUPPORT_REQUIRED per item, using descriptive names and split ID columns)
+- Project Integration Surface: project endpoints, auth, webhook business logic, persistence, terminal, and checkout mode
+- Waffo APIs Exercised: actual SDK/API operations invoked during verification
+- Pay method coverage: list every contracted method with final status, cross-checked against `payMethodConfig().inquiry()` result from Project Integration Surface
+- Non-PASS Items: every non-PASS item must include reason, evidence, ID/order key if available, and next step
+- Checklist results (C1-C8), Go-Live Readiness, Skill Compliance Review, and final verdict
+- Fixes Applied During Testing only as a concise summary when those fixes materially explain integration completeness
+
+Do not include a `Commands Executed` section in the Waffo-facing report. Keep commands in an internal run log or CI artifact.
 
 Print to console AND save to `integration-report-{YYYYMMDD}.md` in project root.

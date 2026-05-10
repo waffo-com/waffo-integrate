@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.3.0] - 2026-04-24
+
+### Added
+
+- **APP Terminal Assessment** (Q6-Q8) — detect whether merchant has mobile APP, how it loads checkout (WebView / external browser), and whether `userTerminal=APP` is passed correctly
+- **APP-mandatory payment methods** — if merchant has APP, WeChat Pay and Apple Pay become REQUIRED test items (not MANUAL/SKIP)
+- **QR code testing protocol** — generate QR code from checkout URL via `qrencode` for real device testing (Apple Pay, Google Pay, WeChat Pay)
+- **Subscription notification event descriptions** — detailed trigger scenarios for SUBSCRIPTION_STATUS_NOTIFICATION, SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION, and PAYMENT_NOTIFICATION
+- **Selection guide** — PERIOD_CHANGED vs PAYMENT_NOTIFICATION decision matrix
+- **Integration Configuration section** in report template — records userTerminal, checkout mode, currency mode, subscription mode, selected notification events
+- **Subscription Event Coverage section** in report template — maps each event type to test cases with PASS/FAIL status
+- **Order ID traceability** — Active Test Results and Pay Method Coverage tables now include Order ID column
+- **Standardized skip reason vocabulary** — redundant, not checkout-available, sandbox limitation, requires real device
+- **Eval #7** — subscription event selection guidance (3 critical assertions)
+
+### Changed
+
+- **APP Terminal Notes** replaced with comprehensive **APP Terminal Assessment** section (always present, not conditional)
+- **Step 3 Q1** expanded with APP follow-up questions (WebView vs external browser) and code generation implications
+- **Context Discovery** expanded to item 9 (integration configuration) + Q6-Q8 (APP terminal)
+
 ## [1.2.1] - 2026-04-02
 
 ### Added

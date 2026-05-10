@@ -357,11 +357,11 @@ router.post('/waffo/webhook',
       .onPayment((notification) => {
         const result = notification.result;
 
-        // NOTE: If Subscription is also integrated, add this filter to skip subscription payments:
+        // NOTE: If Subscription is also integrated, route subscription payment notifications separately:
         // const productName = result?.paymentInfo?.productName;
         // if (productName === 'SUBSCRIPTION' || productName === 'MINI_PROGRAM_SUBSCRIPTION') {
-        //   // Subscription payments are handled by onSubscriptionStatus / onSubscriptionPeriodChanged
-        //   // If you need to handle failed orders during subscription billing, add logic here
+        //   // Subscription integrations must test PAYMENT_NOTIFICATION.
+        //   // Handle or record the subscription payment attempt/retry, then skip one-time fulfillment.
         //   return;
         // }
 

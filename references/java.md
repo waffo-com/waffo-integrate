@@ -431,12 +431,12 @@ public class WaffoWebhookController {
                 .onPayment(notification -> {
                     var result = notification.getResult();
 
-                    // NOTE: If Subscription is also integrated, add this filter to skip subscription payments:
+                    // NOTE: If Subscription is also integrated, route subscription payment notifications separately:
                     // if (result.getPaymentInfo() != null) {
                     //     String productName = result.getPaymentInfo().getProductName();
                     //     if ("SUBSCRIPTION".equals(productName) || "MINI_PROGRAM_SUBSCRIPTION".equals(productName)) {
-                    //         // Subscription payments handled by onSubscriptionStatus / onSubscriptionPeriodChanged
-                    //         // If you need to handle failed orders during subscription billing, add logic here
+                    //         // Subscription integrations must test PAYMENT_NOTIFICATION.
+                    //         // Handle or record the subscription payment attempt/retry, then skip one-time fulfillment.
                     //         return;
                     //     }
                     // }

@@ -484,12 +484,12 @@ func WebhookHandler() gin.HandlerFunc {
 
 		handler := client.Webhook().
 			OnPayment(func(n *core.PaymentNotification) {
-				// NOTE: If Subscription is also integrated, add this filter to skip subscription payments:
+				// NOTE: If Subscription is also integrated, route subscription payment notifications separately:
 				// if n.Result.PaymentInfo != nil {
 				//     pn := n.Result.PaymentInfo.ProductName
 				//     if pn == "SUBSCRIPTION" || pn == "MINI_PROGRAM_SUBSCRIPTION" {
-				//         // Subscription payments are handled by onSubscriptionStatus / onSubscriptionPeriodChanged
-				//         // If you need to handle failed orders during subscription billing, add logic here
+				//         // Subscription integrations must test PAYMENT_NOTIFICATION.
+				//         // Handle or record the subscription payment attempt/retry, then skip one-time fulfillment.
 				//         return
 				//     }
 				// }

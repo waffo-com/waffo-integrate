@@ -200,12 +200,20 @@ For non-card methods (e-wallets, bank transfers, etc.) in Sandbox:
 | subscription-renewal | **Renewal webhook** | Trigger next period billing via Sandbox management page (Playwright clicks "Next period payment success") → `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION` arrives → project processes renewal. Verify the `onSubscriptionPeriodChanged` handler was invoked. |
 | subscription-cancel | **Subscription cancel** | Call project's cancel endpoint → subscription cancelled. Verify status updated in project database. |
 
+### Subscription — notification coverage (if project integrates subscription)
+
+| ID | Criteria | How to verify |
+|----|----------|---------------|
+| subscription-event-status | **Subscription status notification** | Verify `SUBSCRIPTION_STATUS_NOTIFICATION` is received and processed for activation/cancel/status change. Record `subscriptionRequest` and `subscriptionId`. |
+| subscription-event-period-changed | **Subscription period changed notification** | Trigger next period billing via Sandbox management page → verify `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION` is received and processed. Record `subscriptionRequest` and `subscriptionId`. |
+| subscription-event-payment | **Subscription payment notification** | Verify `PAYMENT_NOTIFICATION` is received for the first subscription payment or a renewal payment attempt. Route it by `paymentInfo.productName` so one-time payment fulfillment does not process subscription billing. Record request/acquiring IDs if present plus `subscriptionRequest`/`subscriptionId`. |
+
 ### Subscription — change (if project integrates subscription change)
 
 | ID | Criteria | How to verify |
 |----|----------|---------------|
-| subscription-change | **Subscription change** | Call project's subscription change endpoint (e.g., upgrade plan or change billing cycle) → change succeeds. Verify: (1) change status updated in project database, (2) new plan/amount/period reflected in subscription record, (3) change webhook received and processed if applicable. |
-| subscription-change-inquiry | **Change inquiry** | Call project's change query endpoint → returns correct change status and updated subscription details matching the change request. |
+| subscription-change | **Subscription change** | If upgrade/downgrade is integrated, call project's endpoint backed by `POST /api/v1/subscription/change` → change succeeds. Verify: (1) change status updated in project database, (2) new plan/amount/period reflected in subscription record, (3) `SUBSCRIPTION_CHANGE_NOTIFICATION` received and processed. |
+| subscription-change-inquiry | **Change inquiry** | If upgrade/downgrade is integrated, call project's endpoint backed by `POST /api/v1/subscription/change/inquiry` → returns correct change status and updated subscription details matching the change request. |
 
 ### Subscription — exception scenarios (verified during basic + change tests)
 
@@ -225,18 +233,21 @@ order-create → payment-failure
 order-create-error (independent)
 payment-success → pay-method-coverage (minimum test set from payMethodConfig inquiry)
 payment-success → refund-success → refund-inquiry, refund-webhook              [Phase C1]
-subscription-create → subscription-inquiry, subscription-renewal, subscription-cancel  [Phase C2]
-subscription-change → subscription-change-inquiry                              [Phase C2]
+subscription-create → subscription-inquiry, subscription-event-status, subscription-event-payment
+subscription-renewal → subscription-event-period-changed, subscription-event-payment, subscription-cancel  [Phase C2]
+subscription-change → subscription-change-inquiry, subscription-event-change    [Phase C2, only if upgrade/downgrade integrated]
 ```
 
 ---
 
 ## §4 Report Template
 
-Output the report in Markdown format:
+Output a Waffo-team-facing Markdown report. The report reflects integration completeness and evidence. It is not a command transcript.
 
 ```markdown
-# Integration Acceptance Report
+# Integration Acceptance Report / 集成验收报告
+
+> Report language: if the user and AI interacted in Chinese, write the report body in Chinese; otherwise write English. Keep API paths, event names, enum values, and code identifiers in English.
 
 ## Overview
 
@@ -253,198 +264,179 @@ Output the report in Markdown format:
 
 ## Integration Configuration
 
-> Record the design choices made during Step 3. Only include rows relevant to integrated features.
-
 | Parameter | Value |
 |-----------|-------|
 | userTerminal | {WEB / APP} |
 | Checkout mode | {Waffo checkout / integrator checkout} |
 | Currency mode | {single-currency: USD / multi-currency: USD, IDR, ...} |
-| Subscription mode | {payment-first / service-first} — {payment-first: suspend benefits during retry; service-first: continue service during retry} |
-| Subscription events | {SUBSCRIPTION_STATUS_NOTIFICATION + SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION + ...} |
+| Subscription mode | {payment-first / service-first} |
+| Subscription events | {SUBSCRIPTION_STATUS_NOTIFICATION + SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION + PAYMENT_NOTIFICATION + optional SUBSCRIPTION_CHANGE_NOTIFICATION} |
+
+## Project Integration Surface
+
+> Project endpoints and business behavior discovered before testing. These are not Waffo API endpoints.
+
+| Item | Result |
+|------|--------|
+| Order endpoints | {project HTTP endpoints} |
+| Refund endpoints | {project HTTP endpoints or N/A} |
+| Subscription endpoints | {project HTTP endpoints or N/A} |
+| Config endpoints | {project HTTP endpoints or N/A} |
+| Webhook endpoint | {project HTTP endpoint, auth, signature behavior} |
+| Webhook business logic | {fulfillment/revoke/activation/idempotency behavior} |
+| Persistence | {where request IDs, acquiringOrderID, refundRequestId, subscriptionID are stored} |
+| Credentials | {Sandbox source, sanitized} |
+| APP terminal | {N/A or APP assessment summary} |
+
+## Waffo APIs Exercised
+
+| Capability | Waffo SDK/API Operation | Evidence |
+|------------|-------------------------|----------|
+| Payment create | `order().create()` / `POST /api/v1/order/create` | {test items / order IDs} |
+| Payment inquiry | `order().inquiry()` / `POST /api/v1/order/inquiry` | {test items / order IDs} |
+| Refund | `order().refund()`, `refund().inquiry()` | {refund IDs or N/A} |
+| Subscription | `subscription().create()`, `subscription().manage()`, `subscription().cancel()`; `subscription().change()` / `subscription().changeInquiry()` when upgrade/downgrade is integrated | {subscription IDs / change keys or N/A} |
+| Config | `merchantConfig().inquiry()`, `payMethodConfig().inquiry()` | {counts / MID} |
 
 ## Active Test Results
 
-| Test Item | Result | Order ID | Details |
-|-----------|--------|----------|---------|
-| order-create | PASS | {acquiringOrderID} | checkout URL returned |
-| payment-success (CC_VISA) | PASS | {acquiringOrderID} | balance +100, webhook received |
-| payment-failure (CC_VISA) | PASS | {acquiringOrderID} | balance unchanged |
-| order-create-error | PASS | - | error message correct |
-| webhook-idempotency | PASS | {same as payment-success} | no duplicate execution |
-| pay-method: CC_VISA | PASS | {acquiringOrderID} | payment + webhook verified |
-| pay-method: DANA | PASS | {acquiringOrderID} | e-wallet simulate success |
-| pay-method: BCA_VA | PASS | {acquiringOrderID} | VA parameter passing verified |
-| pay-method: OVO | PASS | {acquiringOrderID} | phone field required, verified |
-| pay-method: APPLEPAY | MANUAL | - | requires real device — integrator to self-test |
-| refund-success | PASS | {acquiringOrderID} | refund initiated (via DANA, not card — K024) |
-| refund-inquiry | PASS | {acquiringOrderID} | status correct |
-| refund-webhook | PASS | {acquiringOrderID} | local status updated |
-| subscription-create | PASS | {subscriptionRequest} | checkout URL + local record |
-| subscription-inquiry | PASS | {subscriptionRequest} | status ACTIVE |
-| subscription-renewal | PASS | {subscriptionRequest} | period 2 success |
-| subscription-cancel | PASS | {subscriptionRequest} | status updated |
-| ... | ... | ... | ... |
+| Test Item | Result | Request ID | Acquiring ID (A单) | Subscription Request | Subscription ID | Refund Request ID | Change Request / Key | Details |
+|-----------|--------|------------|--------------------|----------------------|-----------------|-------------------|----------------------|---------|
+| order-create | PASS | {paymentRequestId} | {acquiringOrderID} | - | - | - | - | checkout URL returned |
+| payment-success ({method}) | PASS | {paymentRequestId} | {acquiringOrderID} | - | - | - | - | payment, webhook, and business logic verified |
+| payment-failure ({method}) | PASS | {paymentRequestId} | {acquiringOrderID} | - | - | - | - | failure state and no-fulfillment verified |
+| order-create-error | PASS | {paymentRequestId} | {acquiringOrderID or -} | - | - | - | - | user-friendly error and local failure state verified |
+| pay-method: {method} | PASS / SKIP / MANUAL / WAFFO_SUPPORT_REQUIRED | {paymentRequestId or -} | {acquiringOrderID or -} | - | - | - | - | {reason and evidence} |
+| refund-success | PASS | {paymentRequestId} | {acquiringOrderID} | - | - | {refundRequestId} | - | refund and state verified |
+| subscription-create | PASS | {paymentRequestId if present} | {acquiringOrderID if present} | {subscriptionRequest} | {subscriptionId} | - | - | activation verified |
+| subscription-renewal | PASS | {paymentRequestId if present} | {acquiringOrderID if present} | {subscriptionRequest} | {subscriptionId} | - | - | renewal webhook/state verified |
+| subscription-change | PASS / N/A | - | - | {origin/new subscriptionRequest} | {subscriptionId} | - | {change key} | required only if upgrade/downgrade integrated |
+| ... | ... | ... | ... | ... | ... | ... | ... | ... |
 
 ## Subscription Event Coverage
 
-> Only present if subscription is integrated.
-
-| Event Type | Received | Mapped Test Cases |
-|------------|----------|-------------------|
-| SUBSCRIPTION_STATUS_NOTIFICATION | PASS | subscription-create (ACTIVE), subscription-cancel |
-| SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION | PASS | subscription-renewal |
-| PAYMENT_NOTIFICATION | N/A | 4.1-4.3 (if selected) |
+| Event Test Item | Event Type | Required When | Result | Request ID | Acquiring ID (A单) | Subscription Request | Subscription ID | Change Request / Key | Evidence / Details |
+|-----------------|------------|---------------|--------|------------|--------------------|----------------------|-----------------|----------------------|--------------------|
+| subscription-event-status | SUBSCRIPTION_STATUS_NOTIFICATION | Subscription integrated | PASS / FAIL / WAFFO_SUPPORT_REQUIRED | - | - | {subscriptionRequest} | {subscriptionId} | - | activation/cancel/status evidence |
+| subscription-event-period-changed | SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION | Subscription integrated | PASS / FAIL / WAFFO_SUPPORT_REQUIRED | - | - | {subscriptionRequest} | {subscriptionId} | - | renewal period evidence |
+| subscription-event-payment | PAYMENT_NOTIFICATION | Subscription integrated | PASS / FAIL / WAFFO_SUPPORT_REQUIRED | {paymentRequestId if present} | {acquiringOrderID if present} | {subscriptionRequest} | {subscriptionId} | - | first payment or renewal payment notification evidence |
+| subscription-event-change | SUBSCRIPTION_CHANGE_NOTIFICATION | Upgrade/downgrade integrated | PASS / N/A / FAIL / WAFFO_SUPPORT_REQUIRED | - | - | {subscriptionRequest} | {subscriptionId} | {change key} | change result evidence |
 
 ## Parameter Check
 
 - [x] `orderDescription`: specific description
-- [x] `goodsName` / `goodsUrl` or `appName`: provided
-- [x] `userEmail`: valid format, no "test"
+- [x] `goodsName`: provided (required)
+- [x] `goodsUrl` or `appName`: provided for compliance/risk-control review; default merchant classification is non-premium, so no exemption unless explicitly confirmed by user or Waffo
+- [x] No App case: `goodsUrl` is provided; `appName` is not invented
+- [x] `goodsUrl`: product detail page or official website URL, not an image URL (if provided)
+- [x] `appName`: only for App merchants; App Store / Google Play listed app name, not package ID or placeholder (if provided)
+- [x] `userEmail`: valid format, no `test`
 - [x] `userTerminal`: matches actual terminal
 - [x] Time fields: ISO 8601 UTC+0
+- [x] Non-card required fields / `payMethodProperties`: verified where applicable
 
 ## Data Integrity Check
 
 - [x] Idempotency key persisted before API call
 - [x] `acquiringOrderID` stored
 - [x] `refundRequestId` returned and persisted
-- [x] Redirect URLs (success + failed + cancel)
-
-## Risk Items
-
-- [x] `WaffoUnknownStatusError` handling: retry + no close + inquiry
-- [x] Webhook duplicate push protection: idempotency check
-- [x] Concurrency safety: row-level lock
-- [x] Amount precision: decimal library used
+- [x] `subscriptionRequest` / `subscriptionId` stored when applicable
+- [x] Redirect URLs: success, failed, cancel
 
 ## Passive Verification (Code Review) — 21 items
 
 | Case | Description | Result | Evidence |
-|------|------------|--------|----------|
+|------|-------------|--------|----------|
 | Payment 1.3 | C0005 channel rejection | COVERED | `file:line` |
 | Payment 1.4 | A0011 idempotency | COVERED | uuid per request |
-| Payment 1.5 | C0001 system unavailable | COVERED | `file:line` |
 | Payment 1.6 | E0001 unknown status | COVERED | `file:line` |
-| Payment 3.3 | webhook sig failure | COVERED | SDK auto-reject |
-| Payment 4.2 | cancel channel rejection | PARTIAL | no user message |
-| ... | ... | ... | ... |
-| Subscription 3.5 | sub webhook sig fail | COVERED | SDK auto-reject |
+| Payment 3.3 | webhook signature failure | COVERED | SDK auto-reject |
+| Subscription 1.8 | unknown status | COVERED / N/A | `file:line` |
 | ... | ... | ... | ... |
 
-**Summary**: 19 COVERED / 1 PARTIAL / 1 MISSING
+**Summary**: {N} COVERED / {N} PARTIAL / {N} MISSING / {N} N/A
 
 ## Pay Method Coverage
 
-> Dynamically populated from `payMethodConfig().inquiry()` results. List every contracted method.
+> Dynamically populated from `payMethodConfig().inquiry()` results. List every contracted active method.
 
-| Method | Country | Type | Status | Order ID | Reason |
-|--------|---------|------|--------|----------|--------|
-| {method} | {country} | {type} | TESTED | {acquiringOrderID} | {role in minimum test set} |
-| {method} | {country} | {type} | SKIPPED | - | {skip reason} |
-| {method} | - | DEVICE_PAY | MANUAL | - | requires real device |
+| Method | Country / Currency | Type | Status | Order ID | Reason / Next Step |
+|--------|--------------------|------|--------|----------|--------------------|
+| {method} | {country/currency} | {type} | TESTED | {acquiringOrderID} | {role in minimum set} |
+| {method} | {country/currency} | {type} | SKIPPED | - | {skip reason} |
+| {method} | {country/currency} | DEVICE_PAY | MANUAL | - | requires real device; test link/QR provided |
+| {method} | {country/currency} | {type} | WAFFO_SUPPORT_REQUIRED | {ID or -} | {support package summary} |
 
-**Skip reason vocabulary:**
+**Status vocabulary:** `TESTED`, `SKIPPED`, `MANUAL`, `WAFFO_SUPPORT_REQUIRED`.
 
-| Skip Reason | When to use |
-|-------------|-------------|
-| `redundant — {type} already covered by {method}` | Same type already tested |
-| `not checkout-available — filtered by payMethodType (K029)` | Contracted but code restricts |
-| `sandbox limitation — no simulation available` | Can't simulate in sandbox |
-| `requires real device` | APPLEPAY / GOOGLEPAY |
+**Skip/support reason vocabulary:**
+
+| Reason | When to use |
+|--------|-------------|
+| `redundant - {type} already covered by {method}` | Same type/country already tested |
+| `not checkout-available - filtered by payMethodType (K029)` | Contracted but project request filters it out |
+| `sandbox limitation - no simulation available` | Sandbox cannot simulate it and docs/support confirm |
+| `requires real device` | APPLEPAY / GOOGLEPAY / APP WebView wallet flow |
+| `support required - unresolved after 3 attempts` | Repeated API/Sandbox/channel behavior cannot be closed locally |
 
 ## APP Terminal Assessment
 
-> Always present. Records whether merchant has a mobile APP and its implications.
-
-### Assessment Result
-
 | Question | Answer |
 |----------|--------|
-| Has mobile APP? (Q6) | {Yes (iOS+Android) / Yes (iOS only) / Yes (Android only) / No} |
+| Has mobile APP? (Q6) | {Yes / No} |
 | Checkout loading mode (Q7) | {WebView / External browser / N/A} |
-| `userTerminal=APP` passed? (Q8) | {Yes / No → FIXABLE_CODE / N/A} |
+| `userTerminal=APP` passed? (Q8) | {Yes / No / N/A} |
+| Device-wallet/APP methods | {PASS / MANUAL / WAFFO_SUPPORT_REQUIRED / N/A} |
 
-### APP-Mandatory Payment Methods
-
-> If Q6=Yes: these methods become REQUIRED (not MANUAL/SKIP). If Q6=No: this section shows "N/A — no mobile APP".
-
-| Method | Status | Reason |
-|--------|--------|--------|
-| WECHATPAY | {REQUIRED / N/A} | WeChat Pay behaves differently in APP WebView vs desktop; must verify in-app flow |
-| APPLEPAY | {REQUIRED / N/A} | Apple Pay only works on iOS Safari or WebView; must test on real device |
-| GOOGLEPAY | {RECOMMENDED / N/A} | Google Pay works on Android Chrome or WebView; recommended for Android APP |
-
-### QR Code Testing Protocol (for APPLEPAY/GOOGLEPAY/WECHATPAY)
-
-When a payment method requires real device testing:
-
-1. Create an order via the project's API endpoint
-2. Get the checkout URL from the response
-3. Generate QR code: `qrencode -t UTF8 "{checkoutURL}"` (terminal) or `qrencode -o /tmp/checkout-qr.png "{checkoutURL}"` (PNG file)
-4. Present QR code to integrator: "请用手机扫描此二维码，在手机上打开收银台页面并完成 {method} 支付测试"
-5. After integrator confirms payment completed on device → verify webhook received + business logic executed
-6. Record result: PASS (device-tested) / FAIL (with reason)
-
-**If `qrencode` is not installed:** Output the checkout URL directly and instruct: "请在手机浏览器中打开此链接测试"
-
-### Desktop-Only Verification Note
-
-Playwright tests verify WEB terminal behavior only. If merchant has APP:
-
-| Test Item | Desktop Verified | APP Re-verification Required |
-|-----------|-----------------|------------------------------|
-| payment-success | ✓ (Playwright) | Yes — before go-live |
-| subscription-create | ✓ (Playwright) | Yes — before go-live |
-| WeChat Pay | N/A (desktop) | REQUIRED — must test in APP WebView |
-| Apple Pay | N/A (desktop) | REQUIRED — must test on iOS device |
-
-## Checklist
-
-| # | Check | Result |
-|---|-------|--------|
-| C1 | All applicable tests executed | PASS |
-| C2 | Pay method coverage (cross-checked against API) | PASS |
-| C3 | Business logic verified | PASS |
-| C4 | Redirect URLs verified | PASS |
-| C5 | Webhook Content-Type application/json | PASS |
-| C6 | Parameter quality (orderDescription, goodsName, userEmail, userTerminal) | PASS |
-| C7 | Data persistence (acquiringOrderID, refundRequestId stored) | PASS |
-| C8 | orderExpiredAt format (if custom expiry) | N/A |
-
-## Verdict: **CONDITIONAL**
-
-## Go-Live Readiness (from Context Discovery Q1-Q6)
-
-> Only items relevant to this project are listed. N/A items are omitted.
+## Go-Live Readiness
 
 | Item | Status | Detail |
 |------|--------|--------|
-| HTTP timeout (Q1) | ⚠ WARNING | Current: 3s → recommend >= 8s (minimum), 15s (recommended) |
-| DNS cache TTL (Q2) | ✓ OK | 60s |
-| Server region (Q3) | ✓ OK | Singapore |
-| WeChat Pay domain (Q4) | N/A | Not integrated |
-| Apple Pay + iframe (Q5) | N/A | Not integrated |
+| HTTP timeout (Q1) | OK / WARNING | {detail} |
+| DNS cache TTL (Q2) | OK / WARNING / N/A | {detail} |
+| Server region (Q3) | OK / WARNING / N/A | {detail} |
+| WeChat Pay domain (Q4) | OK / N/A / ACTION | {detail} |
+| Apple Pay + iframe (Q5) | OK / N/A / BLOCK | {detail} |
+
+## Non-PASS Items
+
+| Item | Status | Request ID | Acquiring ID (A单) | Subscription Request | Subscription ID | Evidence | Reason | Next Step |
+|------|--------|------------|--------------------|----------------------|-----------------|----------|--------|-----------|
+| {method/test} | SKIPPED / MANUAL / WAFFO_SUPPORT_REQUIRED / PARTIAL / FAIL | {id or -} | {id or -} | {id or -} | {id or -} | {screenshot, code ref, or -} | {why not PASS} | {owner/action} |
+
+## Skill Compliance Review
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| Every active contracted method listed | PASS / PARTIAL / FAIL | {payMethodConfig count + coverage rows} |
+| Non-PASS items have reason, evidence, and next step | PASS / PARTIAL / FAIL | {section ref} |
+| All applicable active/passive/exception tests complete | PASS / PARTIAL / FAIL | {summary} |
+| Subscription notification tests explicit | PASS / PARTIAL / FAIL | `SUBSCRIPTION_STATUS_NOTIFICATION`, `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION`, and `PAYMENT_NOTIFICATION` are required when subscription is integrated; `SUBSCRIPTION_CHANGE_NOTIFICATION` is required only when upgrade/downgrade is integrated |
+| Report is Waffo-team-facing and excludes command history | PASS / PARTIAL / FAIL | {no Commands Executed section} |
+| Report language follows interaction language | PASS / PARTIAL / FAIL | Chinese body when user-AI interaction was Chinese; otherwise English |
+| API claims sourced from OpenAPI/developer docs | PASS / PARTIAL / FAIL | {sources} |
 
 ## Fixes Applied During Testing
 
-> Only present if Loop Mode applied fixes during test execution.
+> Optional. Include only a concise summary when fixes explain integration maturity. Keep detailed command logs and retry transcripts in internal run logs or CI artifacts.
 
-| # | Test Item | Attempt | Root Cause | Fix |
-|---|-----------|---------|------------|-----|
-| 1 | {test-item} | N→N+1 | {description} | `file:line` — {what changed} |
+| # | Test Item | Root Cause | Fix Summary |
+|---|-----------|------------|-------------|
+| 1 | {test-item} | {description} | {file/behavior changed} |
 
-**Total**: {N} fixes, {M} unresolved
+## Verdict: **FULL / CONDITIONAL / INCOMPLETE**
 
 ## Remediation
 
-- {item that needs fixing before go-live}
+- {items that need fixing or manual confirmation before go-live}
 ```
 
+Do not include a `Commands Executed` section in the main Waffo-facing report.
+
 **Verdict rules:**
-- **FULL**: All C1-C5 are PASS → integration fully verified
-- **CONDITIONAL**: Any PARTIAL → report lists what remains
-- **INCOMPLETE**: Any FAIL → must fix before go-live
+- **FULL**: all applicable executable tests pass, passive checks are covered/N/A, and no required manual/support item remains open.
+- **CONDITIONAL**: executable tests pass but manual/support/go-live items remain with clear next steps.
+- **INCOMPLETE**: any required executable or passive item fails without an accepted support/manual classification.
 
 ---
 
