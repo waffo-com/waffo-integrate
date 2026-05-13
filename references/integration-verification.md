@@ -184,6 +184,17 @@ npm run build && pm2 restart app  # or kill + node start
 # Java projects
 mvn compile -q && kill $(lsof -ti:$PORT) 2>/dev/null
 java -jar target/*.jar &
+
+# Python projects
+ruff check . && mypy . 2>/dev/null  # static checks (skip if not configured)
+kill $(lsof -ti:$PORT) 2>/dev/null
+# FastAPI / Starlette
+uvicorn app.main:app --host 0.0.0.0 --port $PORT &
+# or Flask
+# flask --app app run --host 0.0.0.0 --port $PORT &
+# or Django
+# python manage.py runserver 0.0.0.0:$PORT &
+sleep 3 && curl -s http://localhost:$PORT/api/status
 ```
 
 **State tracking across retries:**

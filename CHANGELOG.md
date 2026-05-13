@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.4.0] - 2026-05-13
+
+### Added
+
+- **Python language support** — full template `references/python.md` (~600 lines) covering SDK init, order create/inquiry/cancel/capture, refund + refund inquiry, subscription create/inquiry/cancel/manage/change/change_inquiry, and webhook handlers for FastAPI, Flask, and Django
+- **PyPI package install** — Step 5 SDK installation table now includes `waffo` (use `pip install --pre waffo` while it is 0.x beta)
+- **Python project detection** — Step 1 detects `pyproject.toml`, `requirements.txt`, `Pipfile`, `uv.lock`, or `setup.py`
+- **Framework matrix** — Python row: FastAPI (recommended), Flask, Django
+- **Python rebuild block** — `integration-verification.md` adds uvicorn / flask / Django runserver rebuild commands
+- **Rule 8 (Request ID length)** — `uuid.uuid4().hex` added as the Python 32-char idiom
+- **Eval #8** — Python FastAPI payment + refund + webhook scenario with 7 assertions covering PyPI package, 32-char `uuid.uuid4().hex` request IDs, camelCase payload keys vs snake_case method names, `WaffoUnknownStatusError` recovery, FastAPI raw-body webhook reading, and `Content-Type: application/json` + `X-SIGNATURE` response headers
+- **Python pitfalls section** — 10 Python-specific traps (payload keys stay camelCase, `uuid4().hex` not `str(uuid4())`, raw webhook body across frameworks, Content-Type default, thread-safe singleton across Gunicorn workers, etc.)
+
 ## [1.3.1] - 2026-05-10
 
 ### Fixed
