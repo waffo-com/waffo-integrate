@@ -230,6 +230,56 @@
           "critical": true
         }
       ]
+    },
+    {
+      "id": 8,
+      "prompt": "I'm building a Python FastAPI backend. I need to integrate Waffo payment — accept credit card payments, handle refunds, and receive webhook notifications. Project is at ./my-project, credentials are in .env, framework is FastAPI.",
+      "expected_output": "Generate Python code using the `waffo` PyPI package. Order create uses uuid.uuid4().hex (32 chars, no dashes) for paymentRequestId. Payload dict keys are camelCase (orderCurrency, orderAmount, paymentRequestId, userInfo, paymentInfo) even though Python convention is snake_case. SDK method names are snake_case (waffo.order().create(), waffo.order().refund(), waffo.webhook().on_payment()). Write operations catch WaffoUnknownStatusError and recover via inquiry with same request ID. FastAPI webhook handler reads raw body via await request.body(), sets both X-SIGNATURE header AND Content-Type: application/json on response.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "python_pypi_package",
+          "type": "output_contains",
+          "check": "Uses `waffo` PyPI package (pip install waffo) with `from waffo import Waffo, WaffoConfig, Environment`",
+          "critical": true
+        },
+        {
+          "name": "python_uuid_hex_32_char",
+          "type": "output_contains",
+          "check": "Generates request IDs with uuid.uuid4().hex (32 chars, no dashes) — NOT str(uuid4()) which is 36 chars",
+          "critical": true
+        },
+        {
+          "name": "python_camelCase_payload_keys",
+          "type": "output_contains",
+          "check": "Payload dict keys use camelCase: paymentRequestId, orderCurrency, orderAmount, userInfo, paymentInfo (NOT snake_case keys like payment_request_id or order_currency)",
+          "critical": true
+        },
+        {
+          "name": "python_snake_case_methods",
+          "type": "output_contains",
+          "check": "SDK method calls use snake_case: waffo.order().create(), waffo.order().refund(), waffo.webhook().on_payment(), waffo.webhook().on_refund()",
+          "critical": true
+        },
+        {
+          "name": "python_unknown_status_recovery",
+          "type": "output_contains",
+          "check": "Wraps write operations (order().create, order().refund, order().cancel) in try/except WaffoUnknownStatusError and recovers by calling the matching inquiry() with the SAME request ID",
+          "critical": true
+        },
+        {
+          "name": "python_fastapi_raw_body",
+          "type": "output_contains",
+          "check": "FastAPI webhook endpoint reads raw body with `await request.body()` (decoded to str) — does NOT call request.json() or rely on auto-parsed body",
+          "critical": true
+        },
+        {
+          "name": "python_webhook_response_headers",
+          "type": "output_contains",
+          "check": "FastAPI webhook Response sets BOTH X-SIGNATURE header AND media_type='application/json' (or Content-Type: application/json) — not the default text/plain",
+          "critical": true
+        }
+      ]
     }
   ]
 }

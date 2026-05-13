@@ -38,10 +38,10 @@ Copy the `SKILL.md` and `references/` directory into your project. Point your AI
 
 An 7-step interactive wizard that:
 
-1. **Detects language** — Node.js / Java / Go (auto-detect or ask)
+1. **Detects language** — Node.js / Java / Go / Python (auto-detect or ask)
 2. **Checks project status** — existing project or new scaffold
 3. **Selects features** — payments, refunds, subscriptions (webhook auto-derived)
-4. **Picks framework** — Express, Spring Boot, Gin, etc.
+4. **Picks framework** — Express, Spring Boot, Gin, FastAPI, etc.
 5. **Previews code** — shows complete integration code for review
 6. **Writes to project** — installs SDK dependency + generates files
 7. **Verifies integration** — phased end-to-end testing with Markdown acceptance report
@@ -84,6 +84,7 @@ waffo-integrate/
 │   ├── node.md                           # Node.js/TypeScript templates
 │   ├── java.md                           # Java/Spring Boot templates
 │   ├── go.md                             # Go templates
+│   ├── python.md                         # Python (FastAPI/Flask/Django) templates
 │   ├── integration-verification.md       # Step 7 verification protocol
 │   ├── acceptance-criteria.md            # Test cards, Playwright scripts, report template
 │   ├── sandbox-knowledge.md              # Sandbox quirks (K024-K030)
@@ -91,12 +92,12 @@ waffo-integrate/
 ├── docs/
 │   └── INDEX.md                          # Knowledge base index + remote fallback
 └── evals/
-    └── evals.json                        # 6 eval scenarios, 26 assertions
+    └── evals.json                        # 8 eval scenarios, 36 assertions
 ```
 
 ## Evaluation results
 
-Built and tested with Anthropic's official [skill-creator](https://github.com/anthropics/claude-code/tree/main/plugins/skill-creator) plugin. 6 scenarios, 26 assertions:
+Built and tested with Anthropic's official [skill-creator](https://github.com/anthropics/claude-code/tree/main/plugins/skill-creator) plugin. 8 scenarios, 36 assertions:
 
 | Eval | Scenario | Assertions | Result |
 |------|----------|-----------|--------|
@@ -106,6 +107,8 @@ Built and tested with Anthropic's official [skill-creator](https://github.com/an
 | 4 | Go integration verification | 5 | PASS |
 | 5 | Go full features (webhook auto-derive) | 4 | PASS |
 | 6 | Node.js payment only (no subscription filter) | 3 | PASS |
+| 7 | Subscription event selection guidance | 3 | PASS |
+| 8 | Python FastAPI payment + refund + webhook | 7 | — |
 
 ## Requirements
 

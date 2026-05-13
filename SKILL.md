@@ -39,6 +39,7 @@ Step 6: Run full integration verification through project endpoints
 | Node.js integration patterns | `references/node.md` |
 | Java integration patterns | `references/java.md` |
 | Go integration patterns | `references/go.md` |
+| Python integration patterns | `references/python.md` |
 | Step 6 verification protocol | `references/integration-verification.md` |
 | Report template and official cases | `references/acceptance-criteria.md` |
 | Sandbox quirks and simulator behavior | `references/sandbox-knowledge.md` |
@@ -55,6 +56,7 @@ Detect before asking:
 | `package.json` with Node/TypeScript deps | Node.js |
 | `pom.xml` or `build.gradle` | Java |
 | `go.mod` | Go |
+| `pyproject.toml`, `requirements.txt`, `Pipfile`, `uv.lock`, or `setup.py` | Python |
 
 If ambiguous, ask for the language. Existing projects should reuse their layout and payment-provider patterns; new projects may use the default file structures in the language references.
 
@@ -69,6 +71,8 @@ Ask feature questions one at a time, in this order:
 | Subscription | `subscription().create()`, `subscription().inquiry()`, `subscription().cancel()`, `subscription().manage()`, `subscription().change()`, `subscription().changeInquiry()` |
 | Merchant Config | `merchantConfig().inquiry()` |
 | Payment Method Config | `payMethodConfig().inquiry()` |
+
+Python uses snake_case for these method names (`change_inquiry`, `merchant_config`, `pay_method_config`, `on_payment`, `on_subscription_status`, etc.) and snake_case for `Waffo.from_env()` / `WaffoConfig`. Payload **dict keys remain camelCase** in every language because the SDK sends them through to the API verbatim.
 
 Webhook is mandatory for payment integrations. Do not ask whether to add webhook; derive handlers from selected features:
 
@@ -102,6 +106,7 @@ Since webhook is auto-included, ask for the web framework when order payment or 
 | Node.js | Express | NestJS, Fastify |
 | Java | Spring Boot | - |
 | Go | Gin | Echo, Fiber, Chi |
+| Python | FastAPI | Flask, Django |
 
 For subscription integrations, default to and test `SUBSCRIPTION_STATUS_NOTIFICATION`, `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION`, and `PAYMENT_NOTIFICATION`. Add `SUBSCRIPTION_CHANGE_NOTIFICATION` only when subscription upgrade/downgrade is integrated.
 
@@ -129,7 +134,7 @@ Before generating code, read:
 
 - `references/api-contract.md` for wire contracts.
 - `references/code-generation-rules.md` for generated-code guardrails.
-- The language reference: `references/node.md`, `references/java.md`, or `references/go.md`.
+- The language reference: `references/node.md`, `references/java.md`, `references/go.md`, or `references/python.md`.
 - Online docs from `https://waffo.com/docs/llms.txt` only if local references are missing or likely stale.
 
 Generated code must mirror existing payment integrations in the project (Stripe, PayPal, Creem, etc.) for route structure, config style, error handling, status transitions, fulfillment, refund revocation, and subscription lifecycle logic.
@@ -140,7 +145,7 @@ After developer approval:
 
 1. Install the SDK dependency using the language package manager.
 2. Add files into the project's existing architecture; use default structures from language references only for new or empty projects.
-3. Run the project's build command (`npm run build`, `mvn compile`, `go build ./...`, etc.).
+3. Run the project's build/check command (`npm run build`, `mvn compile`, `go build ./...`, `python -m compileall .` or `ruff check && mypy`, etc.).
 4. After build success, immediately start integration verification in the same response. Do not stop at “build passed” unless credentials, server, tunnel, or auth are missing.
 
 SDK installation must use the current package version:
@@ -150,6 +155,7 @@ SDK installation must use the current package version:
 | Node.js | Check `npm view @waffo/waffo-node version`, then install `@waffo/waffo-node` |
 | Java | Check Maven Central for `com.waffo:waffo-java`, then update the build file |
 | Go | Run `go get github.com/waffo-com/waffo-go@latest` |
+| Python | Check `pip index versions waffo` (or `https://pypi.org/pypi/waffo/json`), then install `waffo` (use `pip install --pre waffo` while it is a 0.x beta release) |
 
 If dependency install requires network and fails because of sandboxing, request approval and retry instead of guessing a stale version.
 
