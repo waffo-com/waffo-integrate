@@ -21,10 +21,33 @@ function discoverSkillFiles(srcDir) {
   return files;
 }
 
-const TARGETS = {
-  claude: path.join(os.homedir(), '.claude', 'skills', 'waffo-integrate'),
-  cursor: path.join(process.cwd(), '.cursor', 'skills', 'waffo-integrate'),
+const TARGET_GROUPS = {
+  codex: [
+    path.join(os.homedir(), '.agents', 'skills', 'waffo-integrate'),
+    path.join(os.homedir(), '.codex', 'skills', 'waffo-integrate'),
+    path.join(os.homedir(), '.Codex', 'skills', 'waffo-integrate')
+  ],
+  claude: [
+    path.join(os.homedir(), '.claude', 'skills', 'waffo-integrate')
+  ],
+  cursor: [
+    path.join(process.cwd(), '.cursor', 'skills', 'waffo-integrate')
+  ]
 };
+
+function getTargetDirs(target) {
+  const candidates = TARGET_GROUPS[target] || [];
+  const existing = candidates.filter((candidate) => fs.existsSync(path.dirname(candidate)));
+  if (existing.length > 0) {
+    return existing;
+  }
+
+  if (target === 'codex') {
+    return [TARGET_GROUPS.codex[0]];
+  }
+
+  return candidates.slice(0, 1);
+}
 
 function copySkillFiles(targetDir, label) {
   const srcDir = path.resolve(__dirname, '..');
@@ -52,21 +75,27 @@ function detect() {
   const targets = [];
   const args = process.argv.slice(2);
 
+  if (args.includes('--codex') || args.includes('--agents')) targets.push('codex');
   if (args.includes('--claude')) targets.push('claude');
   if (args.includes('--cursor')) targets.push('cursor');
 
   if (targets.length > 0) return targets;
 
   // Auto-detect
+  const codexDir = path.join(os.homedir(), '.agents');
+  const codexHomeDir = path.join(os.homedir(), '.codex');
+  const codexLegacyDir = path.join(os.homedir(), '.Codex');
   const claudeDir = path.join(os.homedir(), '.claude');
   const cursorDir = path.join(process.cwd(), '.cursor');
 
+  if (fs.existsSync(codexDir) || fs.existsSync(codexHomeDir) || fs.existsSync(codexLegacyDir)) {
+    targets.push('codex');
+  }
   if (fs.existsSync(claudeDir)) targets.push('claude');
   if (fs.existsSync(cursorDir)) targets.push('cursor');
 
   if (targets.length === 0) {
-    // Default: install for claude
-    targets.push('claude');
+    targets.push('codex');
   }
 
   return targets;
@@ -78,10 +107,21 @@ function main() {
   const targets = detect();
 
   for (const target of targets) {
-    copySkillFiles(TARGETS[target], target === 'claude' ? 'Claude Code' : 'Cursor');
+    const dirs = getTargetDirs(target);
+    const label = target === 'cursor'
+      ? 'Cursor'
+      : target === 'claude'
+        ? 'Claude Code'
+        : 'Codex';
+    for (const dir of dirs) {
+      copySkillFiles(dir, label);
+    }
   }
 
   console.log('\nDone! Usage:');
+  if (targets.includes('codex')) {
+    console.log('  Codex: say "integrate waffo" or "接入waffo" to trigger the skill');
+  }
   if (targets.includes('claude')) {
     console.log('  Claude Code: say "integrate waffo" or "接入waffo" to trigger the skill');
   }

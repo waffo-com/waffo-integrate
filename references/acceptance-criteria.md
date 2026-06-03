@@ -181,7 +181,7 @@ For non-card methods (e-wallets, bank transfers, etc.) in Sandbox:
 | payment-failure | **Payment failure** | Create new order via project endpoint → Playwright fills failure test card (§1) → wait for terminal status. Verify: (1) order status updated to failed in project database, (2) business logic NOT executed (e.g., balance unchanged), (3) redirect URL correct on result page. |
 | order-create-error | **Order creation failure** | Call project's order creation endpoint with invalid params (e.g., amount below minimum, or missing required fields) → Verify project returns user-friendly error message and local order is marked as failed (not left in pending). |
 | webhook-idempotency | **Webhook idempotency** | After payment-success completes, replay the same webhook notification to the project's webhook endpoint (use the same payload captured from payment-success or reconstruct it). Verify business logic does NOT execute a second time (e.g., balance doesn't increase again). |
-| pay-method-coverage | **Pay method coverage (minimum test set)** | Call `payMethodConfig().inquiry()` to get contracted methods → apply simplification rules (SKILL.md §Pay Method Discovery Step 3) to build minimum test set → test each selected method: (1) Card — at least 1 brand via §1 test card. (2) E-wallet — at least 1 per country (prefer GCash/Alipay/WeChat for app-class). (3) VA — at least 1 to verify parameter passing. (4) Special-params (OVO, PIX) — must test due to unique required fields. (5) APPLEPAY / GOOGLEPAY — mark MANUAL, inform integrator to test on real device. Report includes full contracted list with tested/skipped/manual status and reason for each. |
+| pay-method-coverage | **Pay method coverage (minimum test set)** | Call `payMethodConfig().inquiry()` to get contracted methods → apply simplification rules (SKILL.md §Pay Method Discovery Step 3) to build minimum test set → test each selected method: (1) Card — at least 1 brand via §1 test card. (2) E-wallet — at least 1 per country (prefer GCash/Alipay/WeChat for app-class). (3) VA — at least 1 to verify parameter passing. (4) Special-params (OVO, PIX) — must test due to unique required fields. (5) APPLEPAY / GOOGLEPAY — mark MANUAL, inform integrator to test on real device. This is a technical minimum coverage set unless a stricter business-defined scope is supplied. Report includes full contracted list with tested/skipped/manual status and reason for each. |
 
 ### Refund (if project integrates refund)
 
@@ -240,9 +240,40 @@ subscription-change → subscription-change-inquiry, subscription-event-change  
 
 ---
 
-## §4 Report Template
+## §4A Verification Blocked Summary
 
-Output a Waffo-team-facing Markdown report. The report reflects integration completeness and evidence. It is not a command transcript.
+When the report hard gate fails, output this instead of the formal report:
+
+```markdown
+## Verification Blocked Summary
+
+- Missing phases: {phase list}
+- Missing evidence: {IDs, coverage matrix, inquiry result, or other blockers}
+- Failed gate: {report hard gate item}
+- Classification: {FIXABLE_CODE / FIXABLE_INFRA / WAFFO_SUPPORT_REQUIRED / MANUAL_REQUIRED}
+- Next step: {specific action to resume verification}
+```
+
+Do not print the formal report body and do not save `integration-report-{YYYYMMDD}.md` when blocked.
+
+## §4B Report Template
+
+If the report hard gate passes but the final outcome is `INCOMPLETE`, output this instead of the formal report:
+
+```markdown
+## Verification Failed Summary
+
+- Final outcome: INCOMPLETE
+- Failed items: {required executable or passive items that failed}
+- Partial items: {items still partial or unverified}
+- Support/manual pending: {WAFFO_SUPPORT_REQUIRED or MANUAL_REQUIRED items that block acceptance}
+- Evidence bundle: {request IDs, A单s, refund IDs, screenshots, or report sections}
+- Next step: {specific remediation and rerun plan}
+```
+
+Do not print the formal report body and do not save `integration-report-{YYYYMMDD}.md` when the final outcome is `INCOMPLETE`.
+
+Output a Waffo-team-facing Markdown report only when the final outcome is `FULL` or `CONDITIONAL`. The report reflects integration completeness and evidence. It is not a command transcript.
 
 ```markdown
 # Integration Acceptance Report / 集成验收报告
@@ -256,11 +287,14 @@ Output a Waffo-team-facing Markdown report. The report reflects integration comp
 | Project | {project name} |
 | Date | {date} |
 | SDK Version | {version} |
+| Skill Version | {package.json version} |
 | Environment | Sandbox |
 | MID | {merchant ID} |
+| Coverage Basis | {minimum test set / expanded contracted coverage / business-defined scope} |
+| Report Eligibility | PASSED_HARD_GATE |
 | Features | Order Payment, Webhook, Refund, Subscription... |
 | Pay Methods Contracted | {full list from payMethodConfig inquiry} |
-| Pay Methods Tested | {minimum test set} |
+| Pay Methods Tested | {minimum test set or stricter approved scope} |
 
 ## Integration Configuration
 
@@ -287,6 +321,14 @@ Output a Waffo-team-facing Markdown report. The report reflects integration comp
 | Persistence | {where request IDs, acquiringOrderID, refundRequestId, subscriptionID are stored} |
 | Credentials | {Sandbox source, sanitized} |
 | APP terminal | {N/A or APP assessment summary} |
+
+## Webhook Delivery Evidence
+
+| Status | Detail | Next Step |
+|--------|--------|-----------|
+| PROJECT_SIDE_VERIFIED | {project-side webhook response, idempotency, and business handling evidence} | {optional follow-up} |
+| WAFFO_SIDE_VERIFIED | {first-party Waffo delivery evidence if available} | - |
+| WAFFO_SIDE_UNVERIFIED | {why Waffo-side evidence is unavailable; project-side verification only} | {manual verification guidance} |
 
 ## Waffo APIs Exercised
 
@@ -404,13 +446,23 @@ Output a Waffo-team-facing Markdown report. The report reflects integration comp
 |------|--------|------------|--------------------|----------------------|-----------------|----------|--------|-----------|
 | {method/test} | SKIPPED / MANUAL / WAFFO_SUPPORT_REQUIRED / PARTIAL / FAIL | {id or -} | {id or -} | {id or -} | {id or -} | {screenshot, code ref, or -} | {why not PASS} | {owner/action} |
 
+**Reason vocabulary (recommended):**
+- `verification skipped`
+- `missing contracted-method source`
+- `phase not executed`
+- `manual evidence pending`
+- `waffo-side evidence unverified`
+
 ## Skill Compliance Review
 
 | Check | Result | Evidence |
 |-------|--------|----------|
+| `payMethodConfig().inquiry()` executed successfully | PASS / PARTIAL / FAIL | {inquiry evidence} |
 | Every active contracted method listed | PASS / PARTIAL / FAIL | {payMethodConfig count + coverage rows} |
 | Non-PASS items have reason, evidence, and next step | PASS / PARTIAL / FAIL | {section ref} |
 | All applicable active/passive/exception tests complete | PASS / PARTIAL / FAIL | {summary} |
+| No active item marked PASS/USED without execution evidence | PASS / PARTIAL / FAIL | {test logs / IDs} |
+| Report generated only after applicable phases complete | PASS / PARTIAL / FAIL | {phase summaries} |
 | Subscription notification tests explicit | PASS / PARTIAL / FAIL | `SUBSCRIPTION_STATUS_NOTIFICATION`, `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION`, and `PAYMENT_NOTIFICATION` are required when subscription is integrated; `SUBSCRIPTION_CHANGE_NOTIFICATION` is required only when upgrade/downgrade is integrated |
 | Report is Waffo-team-facing and excludes command history | PASS / PARTIAL / FAIL | {no Commands Executed section} |
 | Report language follows interaction language | PASS / PARTIAL / FAIL | Chinese body when user-AI interaction was Chinese; otherwise English |
@@ -424,7 +476,7 @@ Output a Waffo-team-facing Markdown report. The report reflects integration comp
 |---|-----------|------------|-------------|
 | 1 | {test-item} | {description} | {file/behavior changed} |
 
-## Verdict: **FULL / CONDITIONAL / INCOMPLETE**
+## Verdict: **FULL / CONDITIONAL**
 
 ## Remediation
 
@@ -433,10 +485,10 @@ Output a Waffo-team-facing Markdown report. The report reflects integration comp
 
 Do not include a `Commands Executed` section in the main Waffo-facing report.
 
-**Verdict rules:**
-- **FULL**: all applicable executable tests pass, passive checks are covered/N/A, and no required manual/support item remains open.
-- **CONDITIONAL**: executable tests pass but manual/support/go-live items remain with clear next steps.
-- **INCOMPLETE**: any required executable or passive item fails without an accepted support/manual classification.
+**Outcome rules:**
+- **FULL**: all applicable executable tests pass, passive checks are covered/N/A, and no required manual/support item remains open. Formal report allowed.
+- **CONDITIONAL**: executable tests pass but manual/support/go-live items remain with clear next steps. Formal report allowed.
+- **INCOMPLETE**: any required executable or passive item fails without an accepted support/manual classification. Emit `Verification Failed Summary` only; do not generate the formal report.
 
 ---
 

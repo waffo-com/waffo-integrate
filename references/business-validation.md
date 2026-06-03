@@ -106,4 +106,4 @@ Before generating Waffo integration code, search the project for existing paymen
 
 ## §5 Integration Acceptance Report Template
 
-After Step 7 completes, generate a formal acceptance report in **Markdown format**. See `references/acceptance-criteria.md` §4 for the full template.
+After Step 7 completes, generate a formal acceptance report in **Markdown format** only if the report hard gate passes **and** the final outcome is `FULL` or `CONDITIONAL`. If the final outcome is `INCOMPLETE`, emit the failed summary instead of the formal report. See `references/acceptance-criteria.md` §4A/§4B for the blocked summary, failed summary, and formal report rules.
