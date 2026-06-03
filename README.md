@@ -1,19 +1,29 @@
 # waffo-integrate
 
-A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) skill that guides developers through integrating the [Waffo Payment SDK](https://github.com/waffo-com/waffo-sdk) into their projects via interactive Q&A.
+An AI coding skill for Codex, Claude Code, and Cursor that guides developers through integrating the [Waffo Payment SDK](https://github.com/waffo-com/waffo-sdk) into their projects and then verifying the integration end to end.
 
 ## Install
 
 ### One command (npm)
 
 ```bash
-# Auto-detect: installs to Claude Code and/or Cursor if detected
+# Auto-detect: installs to Codex, Claude Code, and/or Cursor if detected
 npx @waffo/waffo-integrate
 
 # Or specify target explicitly
+npx @waffo/waffo-integrate --codex
+npx @waffo/waffo-integrate --agents
 npx @waffo/waffo-integrate --claude
 npx @waffo/waffo-integrate --cursor
 ```
+
+### Codex
+
+The npm installer now writes to the live Codex skill roots when they are present:
+
+- `~/.agents/skills/waffo-integrate`
+- `~/.codex/skills/waffo-integrate`
+- `~/.Codex/skills/waffo-integrate`
 
 ### Claude Code only
 
@@ -36,7 +46,7 @@ Copy the `SKILL.md` and `references/` directory into your project. Point your AI
 
 ## What it does
 
-An 7-step interactive wizard that:
+A guided integration flow with Step 7 verification:
 
 1. **Detects language** — Node.js / Java / Go / Python (auto-detect or ask)
 2. **Checks project status** — existing project or new scaffold
@@ -48,7 +58,7 @@ An 7-step interactive wizard that:
 
 ### Built-in safeguards
 
-31 API contract rules prevent common integration mistakes:
+Built-in protocol and contract rules prevent common integration mistakes:
 
 - UUID request IDs exceeding 32-character limit
 - Subscription field name confusion (`currency` vs `orderCurrency`)
@@ -62,23 +72,29 @@ An 7-step interactive wizard that:
 
 ### Integration verification (Step 7)
 
-Phased test execution with automatic fix-and-retry:
+Phased Step 7 execution with automatic fix-and-retry:
 
 - **Phase A** — Core tests: order-create, payment-success/failure, webhook-idempotency
 - **Phase B1/B2** — Pay method coverage: card + non-card (minimum test set from API discovery)
 - **Phase C1** — Refund tests
 - **Phase C2** — Subscription lifecycle tests
-- **Phase D** — Passive verification (21 code review items) + Go-Live questionnaire + Markdown report
+- **Phase D** — Passive verification (21 code review items) + Go-Live questionnaire + report hard gate + Markdown report
 
-Active checklist (C1-C8) + 21 passive verification items + Sandbox knowledge base (K024-K030).
+Key verification safeguards:
+
+- `payMethodConfig().inquiry()` is mandatory before pay-method coverage or formal reporting
+- final report generation is fail-closed behind a report hard gate
+- `Verification Blocked Summary` is used instead of a formal report when required phases or evidence are missing
+- `Webhook Delivery Evidence` distinguishes project-side evidence from Waffo-side evidence
+- report overview includes `Skill Version`, `Coverage Basis`, and `Report Eligibility`
 
 ### Progressive disclosure
 
-Only the main SKILL.md is loaded initially (~380 lines). Language-specific templates, verification protocol, and reference files are loaded on demand, saving tokens.
+Only the main `SKILL.md` is loaded initially. Language-specific templates, verification protocol, and reference files are loaded on demand, saving tokens.
 
 ```
 waffo-integrate/
-├── SKILL.md                              # Integration flow + 31 rules (~380 lines)
+├── SKILL.md                              # Thin entrypoint + verification/report requirements
 ├── references/
 │   ├── api-contract.md                   # Field definitions + status handling
 │   ├── node.md                           # Node.js/TypeScript templates
@@ -92,27 +108,30 @@ waffo-integrate/
 ├── docs/
 │   └── INDEX.md                          # Knowledge base index + remote fallback
 └── evals/
-    └── evals.json                        # 8 eval scenarios, 36 assertions
+    └── evals.json                        # 11 eval scenarios, 45 assertions
 ```
 
-## Evaluation results
+## Evaluation coverage
 
-Built and tested with Anthropic's official [skill-creator](https://github.com/anthropics/claude-code/tree/main/plugins/skill-creator) plugin. 8 scenarios, 36 assertions:
+The repo currently defines 11 eval scenarios and 45 assertions for Anthropic's official [skill-creator](https://github.com/anthropics/claude-code/tree/main/plugins/skill-creator) plugin:
 
 | Eval | Scenario | Assertions | Result |
 |------|----------|-----------|--------|
-| 1 | Node.js payment + refund | 4 | PASS |
-| 2 | Node.js subscription | 5 | PASS |
-| 3 | Java Spring Boot webhook | 5 | PASS |
-| 4 | Go integration verification | 5 | PASS |
-| 5 | Go full features (webhook auto-derive) | 4 | PASS |
-| 6 | Node.js payment only (no subscription filter) | 3 | PASS |
-| 7 | Subscription event selection guidance | 3 | PASS |
-| 8 | Python FastAPI payment + refund + webhook | 7 | — |
+| 1 | Node.js payment + refund | 4 | Defined |
+| 2 | Node.js subscription | 5 | Defined |
+| 3 | Java Spring Boot webhook | 5 | Defined |
+| 4 | Go integration verification | 7 | Defined |
+| 5 | Go full features (webhook auto-derive) | 4 | Defined |
+| 6 | Node.js payment only (no subscription filter) | 3 | Defined |
+| 7 | Subscription event selection guidance | 3 | Defined |
+| 8 | Python FastAPI payment + refund + webhook | 7 | Defined |
+| 9 | Block direct report generation without verification | 3 | Defined |
+| 10 | Require direct SDK pay-method inquiry when no helper exists | 2 | Defined |
+| 11 | Keep proxy/local webhook evidence from being mislabeled PASS | 2 | Defined |
 
 ## Requirements
 
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Cursor](https://cursor.sh), or any AI coding assistant that can read markdown instructions
+- Codex, [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Cursor](https://cursor.sh), or any AI coding assistant that can read markdown instructions
 - A Waffo merchant account (for Sandbox testing)
 
 ## License

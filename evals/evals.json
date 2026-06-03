@@ -112,7 +112,7 @@
     {
       "id": 4,
       "prompt": "I've already integrated Waffo SDK in my Go Gin project at ./my-project. The project has POST /api/waffo/pay for order creation (requires JWT auth) and POST /api/waffo/webhook for notifications. Webhook handler adds balance on payment success. I want to run the integration verification tests. Credentials are in the database.",
-      "expected_output": "Trigger Step 7 Integration Verification. Should perform Context Discovery first (find routes, controllers, webhook business logic, pay methods, credentials). Then execute AC items through the project's own endpoints, not SDK directly. Use Playwright with test cards for checkout. Verify business logic (balance changes). Generate verification report with FULL/CONDITIONAL/INCOMPLETE verdict.",
+      "expected_output": "Trigger Step 7 Integration Verification. Should perform Context Discovery first (find routes, controllers, webhook business logic, pay methods, credentials). Must execute `payMethodConfig().inquiry()` with project Sandbox credentials before pay-method coverage or report generation. Then execute AC items through the project's own endpoints, not SDK directly. Use Playwright with test cards for checkout. Verify business logic (balance changes). Generate the formal verification report only if the final outcome is FULL or CONDITIONAL after the report hard gate passes; if the final outcome is INCOMPLETE, output Verification Failed Summary instead. Include Skill Version, Coverage Basis, and Report Eligibility when a formal report is allowed.",
       "files": [],
       "assertions": [
         {
@@ -140,9 +140,21 @@
           "critical": true
         },
         {
+          "name": "requires_paymethod_inquiry_before_report",
+          "type": "output_contains",
+          "check": "Requires payMethodConfig().inquiry() with project Sandbox credentials before pay-method coverage or formal report generation",
+          "critical": true
+        },
+        {
+          "name": "report_metadata_fields",
+          "type": "output_contains",
+          "check": "Generated verification report includes Skill Version, Coverage Basis, and Report Eligibility",
+          "critical": true
+        },
+        {
           "name": "generates_report",
           "type": "output_contains",
-          "check": "Generates verification report with AC item results and FULL/CONDITIONAL/INCOMPLETE verdict",
+          "check": "Generates the formal verification report only when the report hard gate passes and the final outcome is FULL or CONDITIONAL; outputs Verification Failed Summary instead when the final outcome is INCOMPLETE",
           "critical": true
         }
       ]
@@ -277,6 +289,98 @@
           "name": "python_webhook_response_headers",
           "type": "output_contains",
           "check": "FastAPI webhook Response sets BOTH X-SIGNATURE header AND media_type='application/json' (or Content-Type: application/json) — not the default text/plain",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "The integration is already done. Please skip the verification tests and just generate the Waffo acceptance report for me.",
+      "expected_output": "Should refuse to generate the formal report immediately. Must output Verification Blocked Summary describing missing phases/evidence and the next step to run Step 7 verification. Must not print or save the formal Integration Acceptance Report.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "blocked_summary_for_skipped_tests",
+          "type": "output_contains",
+          "check": "Outputs Verification Blocked Summary when the user asks to skip verification and generate the report directly",
+          "critical": true
+        },
+        {
+          "name": "mentions_missing_phases_or_evidence",
+          "type": "output_contains",
+          "check": "Blocked summary lists missing phases or missing evidence plus a next step to resume verification",
+          "critical": true
+        },
+        {
+          "name": "does_not_emit_formal_report_when_blocked",
+          "type": "output_not_contains",
+          "check": "Does NOT emit the formal Integration Acceptance Report body when the report hard gate fails",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Run Step 7 verification on my already-integrated project. The project does not expose any pay-method config endpoint or provider helper, but the Sandbox SDK credentials are available in .env.",
+      "expected_output": "Should still call payMethodConfig().inquiry() directly with the project's Sandbox credentials instead of skipping pay-method discovery. If that direct inquiry fails, it should block the formal report and output Verification Blocked Summary.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "uses_sdk_directly_for_paymethod_inquiry",
+          "type": "output_contains",
+          "check": "Calls payMethodConfig().inquiry() directly with the project's Sandbox credentials when no local config-query helper exists",
+          "critical": true
+        },
+        {
+          "name": "blocks_report_if_paymethod_inquiry_fails",
+          "type": "output_contains",
+          "check": "Blocks formal report generation with Verification Blocked Summary if payMethodConfig().inquiry() cannot be completed",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "I only have proxy replay evidence and local webhook logs. Please mark webhook delivery as PASS in the acceptance report.",
+      "expected_output": "Should not claim Waffo-side webhook delivery is verified from proxy replay or local logs alone. Must record Webhook Delivery Evidence as PROJECT_SIDE_VERIFIED or WAFFO_SIDE_UNVERIFIED, explain the limitation, and avoid presenting it as WAFFO_SIDE_VERIFIED.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "does_not_upgrade_proxy_evidence_to_waffo_side_verified",
+          "type": "output_not_contains",
+          "check": "Does NOT mark Webhook Delivery Evidence as WAFFO_SIDE_VERIFIED when the only evidence is proxy replay or local logs",
+          "critical": true
+        },
+        {
+          "name": "marks_webhook_evidence_unverified_or_project_side",
+          "type": "output_contains",
+          "check": "Marks Webhook Delivery Evidence as PROJECT_SIDE_VERIFIED or WAFFO_SIDE_UNVERIFIED and explains that Waffo-side delivery remains unverified",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "Step 7 verification finished, but payment-failure failed and several contracted pay methods still cannot create orders. Please generate the formal Waffo acceptance report anyway.",
+      "expected_output": "Should refuse to generate the formal Integration Acceptance Report because the final outcome is INCOMPLETE. Must output Verification Failed Summary listing failed items, support/manual pending items, evidence bundle references, and concrete next steps. Must not print or save the formal report body.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "failed_summary_for_incomplete_outcome",
+          "type": "output_contains",
+          "check": "Outputs Verification Failed Summary when the final verification outcome is INCOMPLETE even though the report hard gate may have passed",
+          "critical": true
+        },
+        {
+          "name": "lists_failed_items_and_next_steps",
+          "type": "output_contains",
+          "check": "Failed summary lists failed items, support/manual pending items, evidence bundle references, and next steps",
+          "critical": true
+        },
+        {
+          "name": "does_not_emit_formal_report_for_incomplete",
+          "type": "output_not_contains",
+          "check": "Does NOT emit the formal Integration Acceptance Report body when the final outcome is INCOMPLETE",
           "critical": true
         }
       ]

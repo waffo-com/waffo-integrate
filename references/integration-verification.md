@@ -17,6 +17,8 @@ Step 7 can be entered two ways:
 1. **After Step 6** — natural continuation after writing integration code
 2. **Direct trigger** — developer says "跑集成测试" on an already-integrated project
 
+Direct trigger starts at Phase A. It does NOT allow skipping required phases or jumping straight to a final report.
+
 ---
 
 ## Phased Execution (MANDATORY)
@@ -49,8 +51,8 @@ Phase C2 — Subscription (~15 tool calls):
   subscription-change → change-inquiry → SUBSCRIPTION_CHANGE_NOTIFICATION (if upgrade/downgrade integrated)
   ✓ Checkpoint: output Phase C2 results
 
-Phase D — Passive Verification + Report (~5 tool calls):
-  Code review 21 items → generate final report with all phase results
+Phase D — Passive Verification + Report Gate (~5 tool calls):
+  Code review 21 items → skill compliance review → report hard gate → generate final report
 ```
 
 - Phase A MUST complete in the current session
@@ -60,6 +62,10 @@ Phase D — Passive Verification + Report (~5 tool calls):
 - Phase C2 may continue in same session or handoff to new session if context is low
 - **Phase D is BLOCKED until ALL prior phases are complete** — do NOT generate the report while any phase is still running or has pending background agents.
 - **Execution order is strict**: A → B1 → B2 → C1 → C2 → D. The only exception: C1 API-only tests (curl) may run while B2 browser tests execute, but Phase D report MUST wait for all.
+
+### Coverage Basis
+
+Default to `Coverage Basis: minimum test set`. If the developer, business owner, or acceptance owner gives a stricter coverage scope, record `Coverage Basis: business-defined scope` and use that stricter scope for pay-method coverage and report wording. Never imply that `minimum test set` equals final business acceptance by itself.
 
 ---
 
@@ -237,7 +243,7 @@ Before generating any test, read the project's code to understand:
 1. **Routes**: Find Waffo-related HTTP endpoints (e.g., `router/`, `routes/`, `app.ts`)
 2. **Controllers**: Understand request/response format, authentication requirements
 3. **Webhook handler**: Understand what business logic runs on payment success/failure (e.g., recharge balance, update order status)
-4. **Pay methods**: Call `payMethodConfig().inquiry()` using the project's SDK credentials to get the **actual contracted pay methods** (source of truth). Filter `currentStatus == "1"` only. Then apply the pay method simplification rules (§Pay Method Discovery) to build the minimum test set.
+4. **Pay methods**: Call `payMethodConfig().inquiry()` using the project's SDK credentials to get the **actual contracted pay methods** (source of truth). Filter `currentStatus == "1"` only. If the project does not expose a local provider/admin helper, instantiate or use the Waffo SDK directly with the project's Sandbox credentials. Then apply the pay method simplification rules (§Pay Method Discovery) to build the minimum test set. If credentials exist but inquiry still fails, classify the issue as `FIXABLE_INFRA` or `WAFFO_SUPPORT_REQUIRED` and stop before pay-method coverage or final report generation.
 5. **Credentials**: Check env vars, config files, database options for Sandbox credentials
 6. **Feature scope**: Determine which features are integrated → map to applicable test items
 7. **payMethodType cross-check** (K029): Read project code to find what `payMethodType` / `payMethodName` values are passed in order/subscription create calls. Cross-compare with step 4's contracted list to produce the **checkout-available** methods. Only methods that are both contracted AND passed in `payMethodType` will appear on the checkout page. Flag mismatches in the summary.
@@ -295,6 +301,7 @@ Project Integration Surface:
   APP mandatory:     WeChat Pay (REQUIRED), Apple Pay (REQUIRED — QR code testing)
   Waffo APIs:        order.create, order.inquiry, refund.inquiry, payMethodConfig.inquiry
   Go-Live:           Q1=15s ✓, Q2=60s ✓, Q3=Singapore ✓, Q4=N/A, Q5=N/A
+  Coverage basis:    minimum test set
 ```
 
 ---
@@ -316,6 +323,65 @@ Gate rules:
 - If subscription upgrade/downgrade is not integrated, `subscription-change`, `subscription-change-inquiry`, and `SUBSCRIPTION_CHANGE_NOTIFICATION` stay `N/A`, not FAIL.
 - If upgrade/downgrade is integrated, those three change items are required and must have IDs/evidence in the report.
 - Do not start Phase A until every integrated feature is `READY` or explicitly `N/A` with a reason.
+
+---
+
+## Report Hard Gate (MANDATORY before formal report generation)
+
+Only generate the formal Waffo-facing Markdown report after ALL of these are true:
+
+1. Every applicable phase has an execution result.
+2. `test_state` contains the core IDs/evidence for the executed items.
+3. `payMethodConfig().inquiry()` succeeded and produced the active contracted-method list.
+4. The Pay Method Coverage matrix includes every active contracted method.
+5. `Skill Compliance Review` is complete and passing enough to allow a verdict.
+
+If any condition fails, output **only** this CLI summary and stop:
+
+```markdown
+## Verification Blocked Summary
+
+- Missing phases: {phase list}
+- Missing evidence: {IDs, coverage matrix, inquiry result, or other blockers}
+- Failed gate: {report hard gate item}
+- Classification: {FIXABLE_CODE / FIXABLE_INFRA / WAFFO_SUPPORT_REQUIRED / MANUAL_REQUIRED}
+- Next step: {specific action to resume verification}
+```
+
+When blocked:
+- Do NOT print the formal report body
+- Do NOT save `integration-report-{YYYYMMDD}.md`
+- Do NOT fabricate PASS/USED results from code inspection, user claims, or previous reports
+
+---
+
+## Result Gate (MANDATORY after verdict calculation)
+
+After the report hard gate passes, calculate the final outcome:
+
+- `FULL`
+- `CONDITIONAL`
+- `INCOMPLETE`
+
+If the final outcome is `INCOMPLETE`, output **only** this CLI summary and stop:
+
+```markdown
+## Verification Failed Summary
+
+- Final outcome: INCOMPLETE
+- Failed items: {required executable or passive items that failed}
+- Partial items: {items still partial or unverified}
+- Support/manual pending: {WAFFO_SUPPORT_REQUIRED or MANUAL_REQUIRED items that block acceptance}
+- Evidence bundle: {request IDs, A单s, refund IDs, screenshots, or report sections}
+- Next step: {specific remediation and rerun plan}
+```
+
+When the final outcome is `INCOMPLETE`:
+- Do NOT print the formal report body
+- Do NOT save `integration-report-{YYYYMMDD}.md`
+- Do NOT convert the failed run into a Waffo-facing acceptance report
+
+Only `FULL` and `CONDITIONAL` outcomes are allowed to produce the formal Waffo-facing report.
 
 ---
 
@@ -391,6 +457,8 @@ For each applicable test item:
 4. **Verify** the expected project behavior (check database state, API response, webhook processing)
 5. **Record** result: PASS / FAIL with details
 
+Do not mark an active item as PASS, USED, or complete unless the current run produced execution evidence for that item.
+
 **Execution order matters** — some tests depend on earlier results:
 ```
 order-create → payment-success → webhook-idempotency
@@ -424,7 +492,7 @@ Key points:
 
 ### Step 1: Get contracted methods
 
-Call `payMethodConfig().inquiry()` with the project's SDK credentials. Filter `currentStatus == "1"`. This is the **source of truth** — do not rely on project config alone.
+Call `payMethodConfig().inquiry()` with the project's SDK credentials. Filter `currentStatus == "1"`. This is the **source of truth** — do not rely on project config alone. If the project lacks a local config-query wrapper, call the SDK directly with the project's Sandbox credentials. If this inquiry cannot be completed, emit `Verification Blocked Summary` and stop before the formal report.
 
 ### Step 2: Classify by type
 
@@ -506,11 +574,12 @@ After all test items are executed, evaluate:
 | C6 | Parameter quality | During active tests, inspect API request parameters: (1) `orderDescription` is specific, not "test" placeholder; (2) `goodsName` is present; (3) at least one of `goodsUrl` or `appName` is present unless explicit premium merchant exemption exists; default is non-premium/no exemption; (4) if the merchant has no App, `goodsUrl` is required and `appName` should not be invented; (5) `goodsUrl` is a product detail page or official website URL, not an image URL; (6) `appName` is only for App merchants and must be the App Store / Google Play listed app name, not a package ID or placeholder; (7) `userEmail` format valid, no "test" in address; (8) `userTerminal` matches actual terminal type (WEB/APP). If a required quality check fails → `FIXABLE_CODE`; if exemption is claimed, record the explicit confirmation evidence in the report. |
 | C7 | Data persistence | After payment-success: verify `acquiringOrderID` stored in project database. After refund-success (if applicable): verify `refundRequestId` returned to caller and persisted. These IDs are required for webhook matching and inquiry operations. |
 | C8 | orderExpiredAt format | Only if project sets custom checkout expiry: verify `orderExpiredAt` is ISO 8601 UTC+0 format ending with `Z`, and value is in the future. Skip if default expiry (4h). |
+| C9 | Webhook delivery evidence transparency | Record `PROJECT_SIDE_VERIFIED`, `WAFFO_SIDE_VERIFIED`, or `WAFFO_SIDE_UNVERIFIED`. If only proxy replay, local logs, or project-side state are available, use `PROJECT_SIDE_VERIFIED` or `WAFFO_SIDE_UNVERIFIED` — never present that as Waffo-side verified. |
 
 **Verdict:**
 - All C1-C8 PASS → **FULL**
-- Any PARTIAL → **CONDITIONAL** (list remediation steps)
-- Any FAIL → **INCOMPLETE** (list what failed and why)
+- Any PARTIAL without required test/passive failure → **CONDITIONAL** (list remediation steps)
+- Any required executable or passive FAIL → **INCOMPLETE** (list what failed and why, then emit `Verification Failed Summary` instead of a formal report)
 
 ---
 
@@ -544,9 +613,12 @@ Before publishing the report, review the test state against this skill:
 
 | Check | Requirement |
 |-------|-------------|
+| payMethodConfig inquiry | `payMethodConfig().inquiry()` was actually executed successfully in this run |
 | Contracted methods | Every active contracted method from `payMethodConfig().inquiry()` appears in Pay Method Coverage |
 | Non-PASS handling | Every SKIP/MANUAL/WAFFO_SUPPORT_REQUIRED has evidence, IDs if available, and a next step |
 | Full verification | All applicable active, exception, passive, refund, subscription, and APP/device items are complete or explicitly classified |
+| No fabricated active results | No active item is marked PASS or USED without current-run execution evidence |
+| Phase order | Formal report generation only happens after all applicable prior phases complete |
 | Subscription notification coverage | For subscription integrations, `SUBSCRIPTION_STATUS_NOTIFICATION`, `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION`, and `PAYMENT_NOTIFICATION` are explicit test rows; `SUBSCRIPTION_CHANGE_NOTIFICATION` is explicit when upgrade/downgrade is integrated |
 | Report audience | Main report is suitable for Waffo technical support and excludes command history/noisy execution logs |
 | Report language | If the user and AI interacted in Chinese, report body is Chinese; otherwise English |
@@ -558,15 +630,17 @@ If any check fails, fix the report or continue verification before producing the
 
 ## Verification Report
 
-Generate report per `references/acceptance-criteria.md` §4 template. Include:
+Generate report per `references/acceptance-criteria.md` §4B rules and formal report template. If the hard gate fails, use the §4A blocked summary instead. If the final outcome is `INCOMPLETE`, use the `Verification Failed Summary` instead of the formal report. Include:
+- Overview metadata: `Skill Version`, `Coverage Basis`, `Report Eligibility`
 - Test item results (PASS/FAIL/SKIP/MANUAL/WAFFO_SUPPORT_REQUIRED per item, using descriptive names and split ID columns)
 - Project Integration Surface: project endpoints, auth, webhook business logic, persistence, terminal, and checkout mode
+- Webhook Delivery Evidence: `PROJECT_SIDE_VERIFIED`, `WAFFO_SIDE_VERIFIED`, or `WAFFO_SIDE_UNVERIFIED`
 - Waffo APIs Exercised: actual SDK/API operations invoked during verification
 - Pay method coverage: list every contracted method with final status, cross-checked against `payMethodConfig().inquiry()` result from Project Integration Surface
 - Non-PASS Items: every non-PASS item must include reason, evidence, ID/order key if available, and next step
-- Checklist results (C1-C8), Go-Live Readiness, Skill Compliance Review, and final verdict
+- Checklist results (C1-C9), Go-Live Readiness, Skill Compliance Review, and final verdict
 - Fixes Applied During Testing only as a concise summary when those fixes materially explain integration completeness
 
 Do not include a `Commands Executed` section in the Waffo-facing report. Keep commands in an internal run log or CI artifact.
 
-Print to console AND save to `integration-report-{YYYYMMDD}.md` in project root.
+Only after the report hard gate passes **and** the final outcome is `FULL` or `CONDITIONAL`, print the report to console AND save to `integration-report-{YYYYMMDD}.md` in project root.
