@@ -40,6 +40,18 @@ jobs:
           fi
           echo "All internal links valid."
 
+      - name: Debug npm publish context
+        run: |
+          echo "package: $(node -p "require('./package.json').name")"
+          echo "version: $(node -p "require('./package.json').version")"
+          echo "registry: $(npm config get registry)"
+          echo "npm whoami:"
+          npm whoami
+          echo "published latest:"
+          npm view @waffo/waffo-integrate version
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish
         run: npm publish --access public
         env:
