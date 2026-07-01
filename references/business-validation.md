@@ -1,6 +1,6 @@
 # Business Validation Guide
 
-This file is loaded during **Step 7** (Integration Verification) only. It provides code review checklists, business questions, competitor reference guidance, and passive verification criteria.
+This file is loaded during **Step 7** (Integration Verification) only. It provides code review checklists, business questions, competitor reference guidance, passive verification criteria, and the Integration Quality Radar output model（集成质量雷达输出模型）.
 
 ---
 
@@ -55,7 +55,7 @@ Before generating Waffo integration code, search the project for existing paymen
 
 ---
 
-## §4 Exception Handling Strategies + Passive Verification Checklist
+## §4 Exception Handling Strategies + Integration Quality Radar
 
 ### Four Unified Exception Handling Strategies
 
@@ -66,7 +66,36 @@ Before generating Waffo integration code, search the project for existing paymen
 | **Signature Verification Failed** | Payment 3.3, 7.3; Subscription 3.5, 4.4 | Do NOT process this notification, keep order status unchanged → query correct status via inquiry API. Payment/refund/subscription signature failure handling is unified. | Passive: Review webhook handler's signature failure branch |
 | **Idempotency Conflict** (A0011) | Payment 1.4, 5.4; Subscription 1.6 | Do not actively construct test. Review code to check paymentRequestId/refundRequestId/subscriptionRequest generation logic (each must be independently generated, never reused). If A0011 appears during actual testing → that item fails. | Passive: Code review + observe during testing |
 
-### Passive Verification Checklist — Payment (8 items)
+### Quality Radar Output Model
+
+使用下面的清单生成报告中的 **Integration Quality Radar / 集成质量雷达** 段落。质量雷达是 passive code review 的客户可读视图，用来补充主动 E2E 证据，不能替代 report hard gate。
+
+| Column | Meaning |
+|---|---|
+| Check Item | 被审查的业务或技术风险点。 |
+| Review Anchor | 需要检查的代码/配置位置，例如 webhook handler、order create service、refund branch。 |
+| Finding | 当前实现事实；能定位时附 file/line evidence。 |
+| Risk Level | `PASS`、`MUST_FIX`、`SHOULD_FIX`、`MONITOR` 或 `N/A`。 |
+| Recommendation | 具体修复、重测或后续动作。 |
+
+Risk mapping:
+
+| Passive Result | Risk Level | Report Rule |
+|---|---|---|
+| `COVERED` | `PASS` | 简要写明证据。 |
+| `MISSING` | `MUST_FIX` | 按 `FIXABLE_CODE` 处理；最终 verdict 前必须进入 Loop Mode。 |
+| `PARTIAL` | `SHOULD_FIX` or `MUST_FIX` | 涉及资金流、幂等、webhook trust 或 unknown-status recovery 时使用 `MUST_FIX`。 |
+| `N/A` | `N/A` | 说明该功能未集成或不适用的原因。 |
+| 证据较弱但未证明缺陷 | `MONITOR` | 记录监控/后续事项，不能包装成 PASS。 |
+
+Example:
+
+| Check Item | Review Anchor | Finding | Risk Level | Recommendation |
+|---|---|---|---|---|
+| Webhook signature verification | webhook handler | SDK 在业务处理前完成验签 | PASS | 保持当前 handler 路径。 |
+| Unknown status recovery | order create error handler | 未发现 `WaffoUnknownStatusError` inquiry 分支 | MUST_FIX | 增加同 key inquiry recovery，rebuild 后重跑失败项。 |
+
+### Passive Verification Checklist — Payment
 
 | Case | Description | Code Review Check Point |
 |------|-----------|----------------------|
@@ -82,7 +111,7 @@ Before generating Waffo integration code, search the project for existing paymen
 | 5.6 | Refund Unknown | Refund WaffoUnknownStatusError handler: no close → inquiry |
 | 7.3 | Refund webhook signature failure | Webhook handler rejects invalid refund signature |
 
-### Passive Verification Checklist — Subscription (7 items)
+### Passive Verification Checklist — Subscription
 
 | Case | Description | Code Review Check Point |
 |------|-----------|----------------------|
@@ -106,4 +135,4 @@ Before generating Waffo integration code, search the project for existing paymen
 
 ## §5 Integration Acceptance Report Template
 
-After Step 7 completes, generate a formal acceptance report in **Markdown format** only if the report hard gate passes **and** the final outcome is `FULL` or `CONDITIONAL`. If the final outcome is `INCOMPLETE`, emit the failed summary instead of the formal report. See `references/acceptance-criteria.md` §4A/§4B for the blocked summary, failed summary, and formal report rules.
+Step 7 完成后，只有 report hard gate 通过且最终结果为 `FULL` 或 `CONDITIONAL`，才生成 **Markdown** 正式验收报告。报告必须包含由 §4 生成的 Integration Quality Radar 表。如果最终结果是 `INCOMPLETE`，输出 failed summary，不生成正式报告。Blocked summary、failed summary 和正式报告规则见 `references/acceptance-criteria.md` §4A/§4B。

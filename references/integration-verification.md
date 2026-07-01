@@ -51,8 +51,8 @@ Phase C2 — Subscription (~15 tool calls):
   subscription-change → change-inquiry → SUBSCRIPTION_CHANGE_NOTIFICATION (if upgrade/downgrade integrated)
   ✓ Checkpoint: output Phase C2 results
 
-Phase D — Passive Verification + Report Gate (~5 tool calls):
-  Code review 21 items → skill compliance review → report hard gate → generate final report
+Phase D — Integration Quality Radar + Report Gate (~5 tool calls):
+  Integration Quality Radar code review → skill compliance review → report hard gate → generate final report
 ```
 
 - Phase A MUST complete in the current session
@@ -583,29 +583,31 @@ After all test items are executed, evaluate:
 
 ---
 
-## Code Review — Passive Verification (MANDATORY after active tests)
+## Code Review — Integration Quality Radar (MANDATORY after active tests)
 
-After all active tests complete, perform a code review against the passive verification checklist in `references/business-validation.md` §4. This covers 21 items: 11 payment exception scenarios, 8 subscription exception scenarios, and 2 data safety checks (time format + idempotency key persist order) — all verified by reading code, not by running tests.
+所有 active tests 完成后，按 `references/business-validation.md` §4 的 passive verification checklist 和 Quality Radar model 做代码审查。覆盖 payment exception scenarios、subscription exception scenarios 和 data safety checks（time format + idempotency key persist order）；这些项目通过读代码验证，不通过主动测试替代。
 
 For each passive verification item:
 
 1. **Read** the relevant code section (error handler, webhook signature check, request ID generation, etc.)
 2. **Check** if the exception handling branch exists and implements the correct strategy
-3. **Record** result: `COVERED` / `MISSING` / `PARTIAL` with the code file and line reference
-4. **If MISSING or PARTIAL → apply Loop Mode fix** — these are `FIXABLE_CODE` defects, same as active test failures. Diagnose → edit fix → rebuild → re-verify. Do NOT just record and move on. Max 3 fix attempts per item, same as active Loop Mode rules.
+3. **Record** passive result: `COVERED` / `MISSING` / `PARTIAL` / `N/A`，并附代码文件和行号证据
+4. **Map** passive result 到 Quality Radar risk level: `PASS`, `MUST_FIX`, `SHOULD_FIX`, `MONITOR`, or `N/A`
+5. **Produce** 客户可读雷达行：Check Item, Review Anchor, Finding, Risk Level, Recommendation
+6. **If MISSING or blocking PARTIAL → apply Loop Mode fix** — 这些是 `FIXABLE_CODE` 缺陷，和 active test failures 一样处理。Diagnose → edit fix → rebuild → re-verify。不能只记录后跳过。每项最多 3 次 fix attempt，和 active Loop Mode 一致。
 
 Example:
 ```
-Passive Verification (Code Review):
-  Payment 1.3 (C0005 channel rejection)  : COVERED  — service/waffo_payment.go:45
-  Payment 1.4 (A0011 idempotency)        : COVERED  — paymentRequestId uses uuid per request
-  Payment 3.3 (webhook signature failure) : COVERED  — SDK HandleWebhook auto-rejects
-  Subscription 1.8 (Unknown Status)       : MISSING  — no WaffoUnknownStatusError handler
-    → Fix applied: added catch branch in service/waffo_subscription.go:89
-    → Re-verified: COVERED ✓
+Integration Quality Radar:
+| Check Item | Review Anchor | Finding | Risk Level | Recommendation |
+|---|---|---|---|---|
+| Payment channel rejection | payment service error handler | C0005 在 service/waffo_payment.go:45 返回 retry/switch-method message | PASS | 保持当前处理。 |
+| Payment idempotency | order create request ID generation | paymentRequestId 每次请求使用唯一 32 字符 key | PASS | 保持当前 key 生成。 |
+| Webhook signature verification | webhook handler | SDK handler 在业务逻辑前拒绝 invalid signatures | PASS | 保持 signature-first flow。 |
+| Subscription unknown status | subscription create error handler | 未发现 `WaffoUnknownStatusError` inquiry 分支 | MUST_FIX | 增加 same-key inquiry recovery，rebuild 后重跑依赖测试。 |
 ```
 
-Include the full Code Review results in the verification report under "Passive Verification" section. Fixed items should show both the original finding and the fix applied.
+在 verification report 的 "Integration Quality Radar" 段落中包含完整雷达结果。已修复项需要同时展示原始 finding 和 fix applied / re-verified result。
 
 ## Skill Compliance Review (MANDATORY before report finalization)
 
@@ -636,6 +638,7 @@ Generate report per `references/acceptance-criteria.md` §4B rules and formal re
 - Project Integration Surface: project endpoints, auth, webhook business logic, persistence, terminal, and checkout mode
 - Webhook Delivery Evidence: `PROJECT_SIDE_VERIFIED`, `WAFFO_SIDE_VERIFIED`, or `WAFFO_SIDE_UNVERIFIED`
 - Waffo APIs Exercised: actual SDK/API operations invoked during verification
+- Integration Quality Radar: passive code review findings mapped to `PASS`, `MUST_FIX`, `SHOULD_FIX`, `MONITOR`, or `N/A`
 - Pay method coverage: list every contracted method with final status, cross-checked against `payMethodConfig().inquiry()` result from Project Integration Surface
 - Non-PASS Items: every non-PASS item must include reason, evidence, ID/order key if available, and next step
 - Checklist results (C1-C9), Go-Live Readiness, Skill Compliance Review, and final verdict

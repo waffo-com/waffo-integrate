@@ -18,6 +18,7 @@ Use these sources in order:
 5. `https://waffo.com/docs/sitemap.xml` only to discover docs pages and modification time.
 
 Do not use `https://waffo.com/llms.txt` or marketing pages as API-contract evidence.
+产品/场景概念问题使用 `https://waffo.com/docs/en/essentials/product-overview`；字段级 API contract 仍以 OpenAPI/API Reference 为准。
 
 ## Flow
 
@@ -44,6 +45,9 @@ Step 6: Run full integration verification through project endpoints
 | Report template and official cases | `references/acceptance-criteria.md` |
 | Sandbox quirks and simulator behavior | `references/sandbox-knowledge.md` |
 | Passive business validation checklist | `references/business-validation.md` |
+| 产品/场景选型解释 | `references/scenario-selection.md` |
+| 客户可读术语和双语报告措辞 | `references/glossary.md` |
+| 按症状排障和支持证据收集 | `references/troubleshooting.md` |
 
 If local references and live docs disagree, prefer OpenAPI for wire contracts and note the discrepancy in the implementation/report.
 
@@ -96,6 +100,8 @@ Ask these context questions when relevant:
 | Currency mode | Single-currency may be hardcoded; multi-currency must accept currency as input. |
 | iframe checkout | Add iframe config if used; Apple Pay cannot be used inside iframe. |
 | Checkout expiry | `orderExpiredAt` must be UTC+0 ISO 8601; default is 4 hours. |
+
+当开发者询问应选择哪种产品/场景/checkout mode，或询问这些上下文问题为什么重要时，先读取 `references/scenario-selection.md`。先解释取舍、默认建议和测试影响，再收集实现参数。
 
 ## Step 3: Framework and Event Selection
 
@@ -195,9 +201,13 @@ For every FAIL or PARTIAL item:
 
 Support package must include MID, environment, pay method, country/currency/amount, order/subscription/refund IDs, sanitized request payload, API error/inquiry status, page text or screenshot, timestamps, and retry/fix history.
 
+在验证前或验证中遇到按症状排障的请求时，读取 `references/troubleshooting.md`。先按证据清单收集事实，再分类 blocker 或准备 Waffo support package。
+
 ## Report Requirements
 
 The final report is for the Waffo technical team and should reflect integration completeness, not command history. If the user and AI primarily interacted in Chinese, write the report body in Chinese; otherwise use English. Keep API paths, event names, enum values, and code identifiers in English.
+
+写客户可读中文或双语报告时，读取 `references/glossary.md` 并保持术语一致。API paths、SDK methods、field names、enum values、event names 保留原文。
 
 Use the template in `references/acceptance-criteria.md`. Required report sections:
 
@@ -207,7 +217,7 @@ Use the template in `references/acceptance-criteria.md`. Required report section
 - Waffo APIs Exercised: actual SDK/API operations used.
 - Active Test Results with split ID columns, including Request ID and Acquiring ID (A单).
 - Subscription Event Coverage with separate rows for required subscription notifications.
-- Parameter, Data Integrity, Passive Verification, Pay Method Coverage, APP Terminal Assessment, Go-Live Readiness.
+- Parameter, Data Integrity, Integration Quality Radar, Pay Method Coverage, APP Terminal Assessment, Go-Live Readiness.
 - Non-PASS Items with reason, evidence, IDs, and next step.
 - Skill Compliance Review.
 - Final outcome: `FULL`, `CONDITIONAL`, or `INCOMPLETE`.
