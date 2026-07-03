@@ -25,9 +25,10 @@ jobs:
           error=0
           for file in SKILL.md docs/*.md; do
             grep -oP '\((?:\.\./)?(references/[^)]+|docs/[^)]+)\)' "$file" 2>/dev/null | tr -d '()' | while read link; do
+              path=${link%%#*}
               # Resolve relative path from the file's directory
               dir=$(dirname "$file")
-              target=$(cd "$dir" && realpath -m "$link" 2>/dev/null || echo "$dir/$link")
+              target=$(cd "$dir" && realpath -m "$path" 2>/dev/null || echo "$dir/$path")
               if [ ! -f "$target" ]; then
                 echo "BROKEN LINK: $file -> $link (resolved: $target)"
                 exit 1
