@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.4.3] - 2026-07-03
+
+### Added
+
+- Added customer-facing skill knowledge references: `references/glossary.md`, `references/scenario-selection.md`, and `references/troubleshooting.md`.
+- Added online documentation source priority guidance, including when to use Waffo Product Overview, `llms.txt`, OpenAPI, and `llms-full.txt`.
+- Expanded eval coverage to 16 scenarios and 61 assertions.
+
+### Changed
+
+- Updated Step 7 reporting language around Integration Quality Radar, acceptance evidence, report hard gates, and customer-readable non-PASS handling.
+- Updated README and docs index to surface the new knowledge-base references.
+- Upgraded the publish workflow to Node.js 24.
+
+### Fixed
+
+- Fixed the publish workflow internal-link check so Markdown links with `#anchor` fragments are handled correctly.
+
+## [1.4.2] - 2026-06-04
+
+### Changed
+
+- Prepared the package for Node.js 24 publish workflow compatibility.
+
+## [1.4.1] - 2026-06-03
+
+### Fixed
+
+- Added npm publish diagnostics to make failed release runs easier to triage.
+- Improved installer and verification details carried forward from the 1.4.0 release line.
+
 ## [1.4.0] - 2026-05-13
 
 ### Added

@@ -2,6 +2,10 @@
 
 An AI coding skill for Codex, Claude Code, and Cursor that guides developers through integrating the [Waffo Payment SDK](https://github.com/waffo-com/waffo-sdk) into their projects and then verifying the integration end to end.
 
+## Changelog
+
+See [CHANGELOG.md](./CHANGELOG.md) for release notes. GitHub Releases are also published for each `v*` tag.
+
 ## Install
 
 ### One command (npm)
