@@ -384,6 +384,116 @@
           "critical": true
         }
       ]
+    },
+    {
+      "id": 13,
+      "prompt": "I'm not sure whether my APP checkout should use userTerminal=WEB or APP. The app opens the Waffo checkout page inside an in-app WebView. Explain the recommendation before generating code.",
+      "expected_output": "Should use scenario-selection guidance to recommend userTerminal=APP for in-app WebView, explain that APP/WebView changes device-wallet and WeChat Pay test requirements, and avoid jumping straight to code without explaining the tradeoff.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "recommends_app_terminal_for_webview",
+          "type": "output_contains",
+          "check": "Recommends `userTerminal=APP` for an in-app WebView checkout flow",
+          "critical": true
+        },
+        {
+          "name": "explains_testing_impact",
+          "type": "output_contains",
+          "check": "Explains that APP/WebView affects required WeChat Pay, Apple Pay, or device-wallet verification",
+          "critical": true
+        },
+        {
+          "name": "explains_before_code",
+          "type": "output_contains",
+          "check": "Provides scenario/tradeoff explanation before collecting implementation parameters or generating code",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "Webhook is not updating my local order. Payment succeeded on checkout, but my order stays PENDING. Help me troubleshoot.",
+      "expected_output": "Should use the troubleshooting guide. It must collect evidence such as paymentRequestId, acquiringOrderID, notifyUrl, inquiry result, server logs, webhook response status/body/headers, and tunnel/proxy URL when applicable. It should classify the issue before proposing code changes.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "collects_webhook_evidence",
+          "type": "output_contains",
+          "check": "Asks for or inspects paymentRequestId, acquiringOrderID, notifyUrl, inquiry result, server logs, and webhook response status/body/headers",
+          "critical": true
+        },
+        {
+          "name": "mentions_common_webhook_causes",
+          "type": "output_contains",
+          "check": "Mentions likely causes such as public HTTPS/tunnel, route auth, signature failure, response content type, or business transaction failure",
+          "critical": true
+        },
+        {
+          "name": "classifies_before_fixing",
+          "type": "output_contains",
+          "check": "Classifies the issue as FIXABLE_CODE, FIXABLE_INFRA, WAFFO_SUPPORT_REQUIRED, MANUAL_REQUIRED, or SKIP_WITH_REASON before finalizing the next step",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "Step 7 verification passed. Generate the Waffo acceptance report, but make the code review section readable for a customer.",
+      "expected_output": "Should keep Active Test Results, Webhook Delivery Evidence, Pay Method Coverage, and hard-gate evidence. The code review/passive verification section should be named Integration Quality Radar and include rows with Check Item, Review Anchor, Finding, Risk Level, Recommendation, and Evidence.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "keeps_evidence_sections",
+          "type": "output_contains",
+          "check": "Includes Active Test Results, Webhook Delivery Evidence, and Pay Method Coverage rather than replacing evidence with a generic checklist",
+          "critical": true
+        },
+        {
+          "name": "uses_quality_radar_section",
+          "type": "output_contains",
+          "check": "Includes an Integration Quality Radar section",
+          "critical": true
+        },
+        {
+          "name": "quality_radar_columns",
+          "type": "output_contains",
+          "check": "Quality Radar rows include Check Item, Review Anchor, Finding, Risk Level, Recommendation, and Evidence",
+          "critical": true
+        },
+        {
+          "name": "does_not_weaken_hard_gate",
+          "type": "output_not_contains",
+          "check": "Does not say the quality radar replaces request IDs, acquiring IDs, webhook evidence, or payMethodConfig inquiry evidence",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "The local skill references don't answer my question about a new Waffo product capability. Can you search the Waffo docs online, and if it involves API fields tell me which source you trust?",
+      "expected_output": "Should use https://waffo.com/docs/llms.txt to discover the latest docs page, use Product Overview for product/scenario concepts, use OpenAPI/API Reference for API fields and wire contracts, and state any discrepancy when online docs differ from local references.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "uses_docs_llms_index",
+          "type": "output_contains",
+          "check": "Uses `https://waffo.com/docs/llms.txt` to discover current documentation pages",
+          "critical": true
+        },
+        {
+          "name": "separates_product_overview_from_api_contract",
+          "type": "output_contains",
+          "check": "Uses Product Overview for product/scenario concepts but OpenAPI/API Reference for API field and wire-contract claims",
+          "critical": true
+        },
+        {
+          "name": "notes_discrepancy_source",
+          "type": "output_contains",
+          "check": "States the source and notes discrepancies when online docs differ from local references",
+          "critical": true
+        }
+      ]
     }
   ]
 }

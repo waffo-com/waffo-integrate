@@ -385,18 +385,23 @@ Output a Waffo-team-facing Markdown report only when the final outcome is `FULL`
 - [x] `subscriptionRequest` / `subscriptionId` stored when applicable
 - [x] Redirect URLs: success, failed, cancel
 
-## Passive Verification (Code Review) — 21 items
+## Integration Quality Radar
 
-| Case | Description | Result | Evidence |
-|------|-------------|--------|----------|
-| Payment 1.3 | C0005 channel rejection | COVERED | `file:line` |
-| Payment 1.4 | A0011 idempotency | COVERED | uuid per request |
-| Payment 1.6 | E0001 unknown status | COVERED | `file:line` |
-| Payment 3.3 | webhook signature failure | COVERED | SDK auto-reject |
-| Subscription 1.8 | unknown status | COVERED / N/A | `file:line` |
-| ... | ... | ... | ... |
+> 客户可读的 passive code review 结果。表格行由 `references/business-validation.md` §4 生成，用来补充上方主动 E2E 证据。
 
-**Summary**: {N} COVERED / {N} PARTIAL / {N} MISSING / {N} N/A
+| Check Item | Review Anchor | Finding | Risk Level | Recommendation | Evidence |
+|------------|---------------|---------|------------|----------------|----------|
+| Webhook signature verification | {webhook handler} | {SDK 在业务处理前完成验签} | PASS / MUST_FIX / SHOULD_FIX / MONITOR / N/A | {修复或保持建议} | {file:line or execution evidence} |
+| Idempotency and locking | {payment/refund/subscription handler} | {去重和锁行为} | PASS / MUST_FIX / SHOULD_FIX / MONITOR / N/A | {修复或保持建议} | {file:line} |
+| Unknown status recovery | {write operation error handler} | {同 key inquiry recovery 行为} | PASS / MUST_FIX / SHOULD_FIX / MONITOR / N/A | {修复或保持建议} | {file:line} |
+| Request ID persistence | {database write before Waffo call} | {外部调用前先持久化 key 的行为} | PASS / MUST_FIX / SHOULD_FIX / MONITOR / N/A | {修复或保持建议} | {file:line} |
+| Refund entitlement rollback | {refund webhook branch} | {权益回滚行为} | PASS / MUST_FIX / SHOULD_FIX / MONITOR / N/A | {修复或保持建议} | {file:line or N/A reason} |
+| Subscription event routing | {subscription and payment webhook handlers} | {event selection 和 `PAYMENT_NOTIFICATION` 路由行为} | PASS / MUST_FIX / SHOULD_FIX / MONITOR / N/A | {修复或保持建议} | {file:line or N/A reason} |
+| APP / iframe checkout risk | {order create params and frontend checkout surface} | {terminal 和 iframe 处理} | PASS / MUST_FIX / SHOULD_FIX / MONITOR / N/A | {修复或保持建议} | {code ref or developer confirmation} |
+
+**Summary**: {N} PASS / {N} MUST_FIX / {N} SHOULD_FIX / {N} MONITOR / {N} N/A
+
+如果 Loop Mode 后仍有 `MUST_FIX`，最终结果是 `INCOMPLETE`，不能生成这份正式报告。
 
 ## Pay Method Coverage
 

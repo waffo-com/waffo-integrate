@@ -78,7 +78,7 @@ Phased Step 7 execution with automatic fix-and-retry:
 - **Phase B1/B2** — Pay method coverage: card + non-card (minimum test set from API discovery)
 - **Phase C1** — Refund tests
 - **Phase C2** — Subscription lifecycle tests
-- **Phase D** — Passive verification (21 code review items) + Go-Live questionnaire + report hard gate + Markdown report
+- **Phase D** — Integration Quality Radar / 集成质量雷达（passive code review）+ Go-Live questionnaire + report hard gate + Markdown report
 
 Key verification safeguards:
 
@@ -86,6 +86,7 @@ Key verification safeguards:
 - final report generation is fail-closed behind a report hard gate
 - `Verification Blocked Summary` is used instead of a formal report when required phases or evidence are missing
 - `Webhook Delivery Evidence` distinguishes project-side evidence from Waffo-side evidence
+- `Integration Quality Radar` 将被动代码审查风险表达成客户可读的检查项、发现、风险级别和建议
 - report overview includes `Skill Version`, `Coverage Basis`, and `Report Eligibility`
 
 ### Progressive disclosure
@@ -104,16 +105,19 @@ waffo-integrate/
 │   ├── integration-verification.md       # Step 7 verification protocol
 │   ├── acceptance-criteria.md            # Test cards, Playwright scripts, report template
 │   ├── sandbox-knowledge.md              # Sandbox quirks (K024-K030)
-│   └── business-validation.md            # Passive verification checklist
+│   ├── business-validation.md            # Integration Quality Radar + passive verification
+│   ├── scenario-selection.md             # 产品/场景选型取舍
+│   ├── glossary.md                       # 客户可读术语
+│   └── troubleshooting.md                # 按症状排障指南
 ├── docs/
 │   └── INDEX.md                          # Knowledge base index + remote fallback
 └── evals/
-    └── evals.json                        # 11 eval scenarios, 45 assertions
+    └── evals.json                        # 16 eval scenarios, 61 assertions
 ```
 
 ## Evaluation coverage
 
-The repo currently defines 11 eval scenarios and 45 assertions for Anthropic's official [skill-creator](https://github.com/anthropics/claude-code/tree/main/plugins/skill-creator) plugin:
+The repo currently defines 16 eval scenarios and 61 assertions for Anthropic's official [skill-creator](https://github.com/anthropics/claude-code/tree/main/plugins/skill-creator) plugin:
 
 | Eval | Scenario | Assertions | Result |
 |------|----------|-----------|--------|
@@ -128,6 +132,11 @@ The repo currently defines 11 eval scenarios and 45 assertions for Anthropic's o
 | 9 | Block direct report generation without verification | 3 | Defined |
 | 10 | Require direct SDK pay-method inquiry when no helper exists | 2 | Defined |
 | 11 | Keep proxy/local webhook evidence from being mislabeled PASS | 2 | Defined |
+| 12 | Block formal report for INCOMPLETE outcome | 3 | Defined |
+| 13 | APP WebView 场景选型说明 | 3 | Defined |
+| 14 | Webhook 排障证据收集 | 3 | Defined |
+| 15 | Integration Quality Radar 报告段落 | 4 | Defined |
+| 16 | 在线文档来源优先级 | 3 | Defined |
 
 ## Requirements
 

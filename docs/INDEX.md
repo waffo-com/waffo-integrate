@@ -10,40 +10,36 @@ Extended documentation for common scenarios, troubleshooting, and best practices
 
 | Topic | Document | Description |
 |-------|----------|-------------|
-| Acceptance Criteria | [../references/acceptance-criteria.md](../references/acceptance-criteria.md) | 15 acceptance criteria (AC-1~AC-15) for project-level integration verification |
+| Acceptance Criteria | [../references/acceptance-criteria.md](../references/acceptance-criteria.md) | 固定验收标准、Playwright checkout protocol、blocked/failed summary 和正式报告模板 |
+| Product and scenario selection | [../references/scenario-selection.md](../references/scenario-selection.md) | feature、checkout、terminal、subscription mode、iframe、currency 的选择规则 |
+| Glossary | [../references/glossary.md](../references/glossary.md) | 客户可读回复和验收报告使用的中英文术语 |
+| Troubleshooting | [../references/troubleshooting.md](../references/troubleshooting.md) | 按症状排障、证据收集和支持分类 |
 
 ## FAQ
 
 | Topic | Document | Description |
 |-------|----------|-------------|
-| _Coming soon_ | | |
-
-<!-- Example:
-| Subscription billing retry | [faq/subscription-retry.md](faq/subscription-retry.md) | How Waffo handles failed recurring payments and retry logic |
-| Apple Pay integration | [faq/applepay-setup.md](faq/applepay-setup.md) | Domain verification, merchant ID setup, and sandbox testing |
--->
+| Which checkout mode should I use? | [../references/scenario-selection.md](../references/scenario-selection.md#checkout-归属) | 对比 Waffo checkout 和 integrator checkout |
+| Should APP WebView pass `WEB` or `APP`? | [../references/scenario-selection.md](../references/scenario-selection.md#支付终端选择) | 终端选择以及设备钱包测试影响 |
+| What terminology should reports use? | [../references/glossary.md](../references/glossary.md) | 报告和支持包中的标准中英文术语 |
 
 ## Troubleshooting
 
 | Symptom | Document | Description |
 |---------|----------|-------------|
-| _Coming soon_ | | |
-
-<!-- Example:
-| A0003 error on subscription create | [troubleshooting/a0003-missing-fields.md](troubleshooting/a0003-missing-fields.md) | Required fields that openapi.json doesn't mark as required |
-| Webhook not received | [troubleshooting/webhook-not-received.md](troubleshooting/webhook-not-received.md) | Common causes: URL not public, signature mismatch, firewall |
--->
+| Webhook not received or business not updated | [../references/troubleshooting.md](../references/troubleshooting.md#webhook-收不到或业务状态未更新) | 支付成功但项目状态未更新时的证据清单和常见原因 |
+| Checkout page stuck or payment form fails | [../references/troubleshooting.md](../references/troubleshooting.md#checkout-页面卡住或支付表单失败) | 页面检查、本地化字段、iframe/设备风险和 inquiry 检查 |
+| Pay method not displayed | [../references/troubleshooting.md](../references/troubleshooting.md#支付方式不展示) | 将签约方式与项目 `payMethodType` / `payMethodName` 过滤条件交叉核对 |
+| Refund fails | [../references/troubleshooting.md](../references/troubleshooting.md#退款失败) | 退款证据、e-wallet 来源优先级和 inquiry/webhook 检查 |
+| Subscription event missing or misrouted | [../references/troubleshooting.md](../references/troubleshooting.md#订阅事件缺失或路由错误) | handler 注册和 `PAYMENT_NOTIFICATION` 路由检查 |
 
 ## Best Practices
 
 | Topic | Document | Description |
 |-------|----------|-------------|
-| _Coming soon_ | | |
-
-<!-- Example:
-| Idempotency design | [best-practices/idempotency.md](best-practices/idempotency.md) | Request ID generation, retry strategy, deduplication |
-| Multi-currency checkout | [best-practices/multi-currency.md](best-practices/multi-currency.md) | orderCurrency vs userCurrency, FX handling |
--->
+| Integration Quality Radar | [../references/business-validation.md](../references/business-validation.md#4-exception-handling-strategies--integration-quality-radar) | 将被动代码审查表达为客户可读的风险雷达表 |
+| Product/scenario selection | [../references/scenario-selection.md](../references/scenario-selection.md) | 收集实现参数前先解释方案取舍 |
+| Online docs source priority | [../references/scenario-selection.md](../references/scenario-selection.md#在线文档使用) | 说明何时使用 Product Overview、`llms.txt`、OpenAPI 和 `llms-full.txt` |
 
 ---
 
@@ -70,7 +66,7 @@ Scan filenames for keyword matches, then fetch the most relevant file.
 
 **When to use remote fallback**:
 - Developer encounters an error code not documented locally (e.g., new error code added after their skill version)
-- Local FAQ/Troubleshooting/Best Practices sections show "Coming soon"
+- Local FAQ/Troubleshooting/Best Practices sections do not cover the issue
 - Developer asks about a feature or scenario not covered by bundled references
 
 ---
