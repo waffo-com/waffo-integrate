@@ -19,7 +19,7 @@ Extended documentation for common scenarios, troubleshooting, and best practices
 
 | Topic | Document | Description |
 |-------|----------|-------------|
-| Which checkout mode should I use? | [../references/scenario-selection.md](../references/scenario-selection.md#checkout-归属) | 对比 Waffo checkout 和 integrator checkout |
+| Which checkout selection should I use? | [../references/scenario-selection.md](../references/scenario-selection.md#checkout-归属) | 对比 Waffo checkout 和 integrator checkout |
 | Should APP WebView pass `WEB` or `APP`? | [../references/scenario-selection.md](../references/scenario-selection.md#支付终端选择) | 终端选择以及设备钱包测试影响 |
 | What terminology should reports use? | [../references/glossary.md](../references/glossary.md) | 报告和支持包中的标准中英文术语 |
 

@@ -31,6 +31,15 @@ Step 5: Write to project after approval and build
 Step 6: Run full integration verification through project endpoints
 ```
 
+## Question Policy (applies to all steps)
+
+Never assume an integration value and proceed silently. Separate two classes of unknowns:
+
+- **Preference decisions the developer owns** — features, user terminal, checkout selection, subscription mode, currency mode, iframe/device-wallet handling, per-handler webhook business rules, redirect behavior, and every business-confirmation question in `references/business-validation.md` §2. **Ask the developer first.** If they cannot answer, verify against the project's existing code/config, present the concrete value you found, and get their confirmation before using it — reading code is evidence for a confirmation, not a substitute for it.
+- **Facts that live in code** — e.g. the source of truth for payment results, whether `userTerminal` is actually passed, whether currency is actually hardcoded, and the audit items in `references/business-validation.md` §1 Code Check List. **Read the code first** and report the finding for confirmation; do not gate a bug-detection audit on a verbal answer that could be wrong.
+
+Exempt from asking: which language/framework the repo uses (auto-detect; the framework generation target is still confirmed per Step 3) and the §1 Code Check List audit of already-written code.
+
 ## Reference Loading Map
 
 | Need | Load |
@@ -95,13 +104,13 @@ Ask these context questions when relevant:
 |-------|-----------------|
 | User terminal | `WEB` or `APP`; if APP, ask external browser vs in-app WebView. APP requires `userTerminal=APP` and makes contracted WeChat Pay / Apple Pay required device tests. |
 | Checkout selection | Integrator checkout passes `payMethodType`/`payMethodName`; Waffo checkout omits them and lets Waffo show methods. |
-| Subscription mode | Payment-first suspends benefits during retry; service-first continues benefits during retry. |
+| Subscription mode | Two axes — (1) billing cycle & dunning once retries are exhausted, (2) benefits during the retry window; payment-first and service-first differ on both. Explain both to the developer. Full comparison, date example, and retry-config note: `references/scenario-selection.md`. |
 | Subscription refund | Generate subscription refund code only if needed. |
 | Currency mode | Single-currency may be hardcoded; multi-currency must accept currency as input. |
 | iframe checkout | Add iframe config if used; Apple Pay cannot be used inside iframe. |
 | Checkout expiry | `orderExpiredAt` must be UTC+0 ISO 8601; default is 4 hours. |
 
-当开发者询问应选择哪种产品/场景/checkout mode，或询问这些上下文问题为什么重要时，先读取 `references/scenario-selection.md`。先解释取舍、默认建议和测试影响，再收集实现参数。
+当开发者询问应选择哪种产品/场景/checkout selection，或询问这些上下文问题为什么重要时，先读取 `references/scenario-selection.md`。先解释取舍、默认建议和测试影响，再收集实现参数。
 
 ## Step 3: Framework and Event Selection
 
@@ -134,7 +143,7 @@ Preview must show how these behaviors are handled:
 | Webhook | Signature verification, signed response, idempotency, locking, and business transaction |
 | Persistence | `acquiringOrderID`, `refundRequestId`, `subscriptionRequest`, and `subscriptionID` storage where applicable |
 | Redirects | Success, failed, and cancel URLs set for checkout flows |
-| Pay methods | `payMethodType`/`payMethodName` behavior matches checkout ownership decision |
+| Pay methods | `payMethodType`/`payMethodName` behavior matches checkout selection decision |
 
 Before generating code, read:
 
@@ -169,7 +178,7 @@ If context is low, hand off with: `Step 7 requires a new session. Run 集成测�
 
 ## Step 6: Integration Verification
 
-Read `references/integration-verification.md` for the full protocol. Verification MUST run through project endpoints, not direct SDK calls, and must complete every applicable acceptance item before release. Phasing is allowed; reporting is blocked until all phases complete and the report hard gate passes.
+Read `references/integration-verification.md` for the full protocol. Verification MUST run through project endpoints, not direct SDK calls, and must complete every applicable acceptance item before release. Phasing is allowed; reporting is blocked until all phases complete and the report hard gate passes. Apply the Question Policy (top of this file) to every business-confirmation question: ask preference decisions, and audit facts-in-code rather than accepting a verbal answer.
 
 Phases:
 
