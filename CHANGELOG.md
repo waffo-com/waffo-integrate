@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.4.4] - 2026-07-17
+
+### Added
+
+- **Question Policy** (`SKILL.md`, top-level, applies to all steps): never assume an integration value — ask the developer for preference decisions first; for facts that live in code, audit the code and confirm the finding; confirm any inferred value before using it. Language/framework detection and the `business-validation.md` §1 code-audit checklist stay exempt.
+- Subscription-mode guidance now describes **both axes** — billing cycle & dunning (payment-first resets the billing anchor to the actual payment date and stops charging once retries are exhausted; service-first keeps the original anchor and keeps charging) and benefits during the retry window — with a worked date example (`references/scenario-selection.md`).
+- "Subscription retry policy" row in the acceptance report template; documented that renewal retry count/interval is a Waffo-side subscription contract config (default 2 attempts including the first, once per day), not integration code.
+- Evals 17–19 covering ask-first (no silent default of subscription mode), the two-axis payment-first/service-first definition, and retry-is-contract-config.
+
+### Changed
+
+- Reconciled `business-validation.md` §2 with §3: prefer proposing an answer from an existing payment-provider integration and confirming it, cold-asking only as a last resort.
+- Standardized on the term "checkout selection" across `SKILL.md`, references, and docs (previously "checkout mode" / "checkout ownership").
+- Included `CHANGELOG.md` in the published npm package; added `.idea/` and the local integration-test sandbox to `.gitignore`.
+
 ## [1.4.3] - 2026-07-03
 
 ### Added
