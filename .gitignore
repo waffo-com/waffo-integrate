@@ -1,2 +1,8 @@
 .DS_Store
 CLAUDE.md
+
+# IDE
+.idea/
+
+# Local integration test sandbox (contains credentials + node_modules)
+waffo-integration-test/
