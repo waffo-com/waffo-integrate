@@ -301,9 +301,10 @@ Output a Waffo-team-facing Markdown report only when the final outcome is `FULL`
 | Parameter | Value |
 |-----------|-------|
 | userTerminal | {WEB / APP} |
-| Checkout mode | {Waffo checkout / integrator checkout} |
+| Checkout selection | {Waffo checkout / integrator checkout} |
 | Currency mode | {single-currency: USD / multi-currency: USD, IDR, ...} |
 | Subscription mode | {payment-first / service-first} |
+| Subscription retry policy | Waffo-side contract config (confirm with Waffo) — {N attempts / interval, or not-confirmed} |
 | Subscription events | {SUBSCRIPTION_STATUS_NOTIFICATION + SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION + PAYMENT_NOTIFICATION + optional SUBSCRIPTION_CHANGE_NOTIFICATION} |
 
 ## Project Integration Surface

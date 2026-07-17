@@ -494,6 +494,78 @@
           "critical": true
         }
       ]
+    },
+    {
+      "id": 17,
+      "prompt": "Add subscription billing to my Node.js project at ./my-project. Monthly plan, $12/month. Credentials are in .env.",
+      "expected_output": "Should NOT silently pick a subscription mode. Must ask the developer whether they want payment-first or service-first (explaining both the billing-cycle/dunning axis and the benefit axis) before generating subscription code. If it reads a mode from existing code, it must state the finding and ask the developer to confirm rather than assuming.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "asks_subscription_mode",
+          "type": "output_contains",
+          "check": "Asks the developer whether the subscription is payment-first or service-first instead of silently defaulting to one",
+          "critical": true
+        },
+        {
+          "name": "does_not_silently_default_mode",
+          "type": "output_not_contains",
+          "check": "Does NOT proceed to generate subscription code with an assumed mode without the developer confirming it",
+          "critical": true
+        },
+        {
+          "name": "confirms_inferred_values",
+          "type": "output_contains",
+          "check": "If a value is read from existing code, states the finding and asks the developer to confirm before using it (reading code is not a substitute for confirmation)",
+          "critical": false
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "prompt": "What is the difference between payment-first and service-first subscription mode in Waffo?",
+      "expected_output": "Should explain BOTH axes: (1) billing cycle & dunning — payment-first resets the billing cycle to the actual payment date and stops charging the next period once retries are exhausted, while service-first keeps the original billing anchor and still charges the next period after retries are exhausted; (2) benefits during retry — payment-first suspends benefits during the retry window, service-first keeps benefits. Should not explain only one axis.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "covers_billing_cycle_axis",
+          "type": "output_contains",
+          "check": "Explains the billing-cycle/dunning axis: payment-first resets the cycle to the payment date and does not charge the next period after retries are exhausted; service-first keeps the anchor and still charges",
+          "critical": true
+        },
+        {
+          "name": "covers_benefit_axis",
+          "type": "output_contains",
+          "check": "Explains the benefit axis: payment-first suspends benefits during retry; service-first keeps benefits during retry",
+          "critical": true
+        },
+        {
+          "name": "does_not_explain_only_one_axis",
+          "type": "output_not_contains",
+          "check": "Does NOT describe the modes using only the benefit axis (or only the billing axis) without the other",
+          "critical": false
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "prompt": "How many times will Waffo retry a failed subscription renewal, and can I configure the retry count and interval in my integration code?",
+      "expected_output": "Should state that retry count and interval are a Waffo-side subscription contract configuration (developer-reference default: 2 attempts including the first, once per day; interval configurable), NOT something set in integration code. Should tell the developer to confirm the actual contract config with Waffo and must NOT generate code that hardcodes retry count/interval or retry scheduling.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "retry_is_waffo_contract_config",
+          "type": "output_contains",
+          "check": "States retry count/interval is a Waffo-side subscription contract config, not decided by integration code, and to confirm the actual value with Waffo",
+          "critical": true
+        },
+        {
+          "name": "does_not_hardcode_retry",
+          "type": "output_not_contains",
+          "check": "Does NOT generate integration code that hardcodes subscription renewal retry count, interval, or a retry scheduler",
+          "critical": true
+        }
+      ]
     }
   ]
 }

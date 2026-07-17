@@ -27,9 +27,9 @@ Read the project's code and verify these items automatically:
 
 ---
 
-## §2 Business Confirmation Questions (Ask First, Never Guess)
+## §2 Business Confirmation Questions (Confirm First, Never Guess)
 
-Ask the developer these questions directly — never guess an answer. If the developer cannot answer, verify against existing code, documentation, and competitor implementations, then state what you found and confirm it with the developer before relying on it. An inferred answer that has not been confirmed must not be treated as settled:
+Before asking, check whether the answer is already established by the developer's Step 2 answers or an existing payment-provider integration (see §3). If a high-confidence answer exists in code, propose it with file/line evidence and ask the developer to confirm (yes/no) rather than cold-asking; only cold-ask when neither prior answers nor existing code resolves it. Never treat an unconfirmed inferred answer as settled. For the bug-detection checks below (e.g. Q1, the source of truth for payment results), read the code to verify even if the developer answers — a confident-but-wrong answer would hide the defect:
 
 | # | Question | Why It Matters |
 |---|---------|---------------|
@@ -51,7 +51,7 @@ Before generating Waffo integration code, search the project for existing paymen
 - **Refund handling**: How refunds affect user benefits
 - **Route organization and naming**: URL patterns, controller grouping
 
-**Waffo integration MUST prioritize reusing existing patterns** to reduce integrator's cognitive load and avoid needing to ask many business questions.
+**Waffo integration MUST prioritize reusing existing patterns** to reduce integrator's cognitive load and avoid needing to ask many business questions. This competitor-pattern reuse is the preferred way to answer §2: propose the found pattern with file/line evidence and have the developer confirm it, instead of cold-asking.
 
 ---
 

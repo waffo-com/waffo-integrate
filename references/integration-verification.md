@@ -169,7 +169,7 @@ When a case is `WAFFO_SUPPORT_REQUIRED`, collect this package before contacting 
 | Field | Required Evidence |
 |-------|-------------------|
 | Merchant context | MID, environment, SDK language/version, feature under test |
-| Payment context | payMethodName, payMethodType, country, currency, amount, terminal, checkout mode |
+| Payment context | payMethodName, payMethodType, country, currency, amount, terminal, checkout selection |
 | Identifiers | paymentRequestId, acquiringOrderId, refundRequestId, subscriptionRequest, subscriptionId as applicable |
 | API evidence | sanitized request payload, response code/msg, inquiry result, webhook payload summary if received |
 | UI evidence | checkout URL, page text/screenshot, clicked simulator/device action, timestamp |
@@ -269,9 +269,9 @@ Before generating any test, read the project's code to understand:
    Record answers for the report. If developer doesn't know (e.g., timeout), try to find the value in project code (HTTP client config, DNS resolver config).
 
 9. **Integration configuration** (from the developer's Step 2/3 answers; if any value is missing, verify it in project code and confirm with the developer before recording — do not guess):
-   - `userTerminal`: WEB or APP (read from order/subscription create calls)
-   - Subscription mode: payment-first or service-first (read from SDK config or handler comments)
-   - Checkout mode: Waffo checkout (no `payMethodType`) or integrator checkout (has `payMethodType`)
+   - `userTerminal`: WEB or APP (from developer answer; if missing, verify in order/subscription create calls and confirm)
+   - Subscription mode: payment-first or service-first (from developer answer; if missing, verify in SDK config/handler comments and confirm)
+   - Checkout selection: Waffo checkout (no `payMethodType`) or integrator checkout (has `payMethodType`)
    - Currency mode: single-currency (hardcoded) or multi-currency (parameter)
    - Selected subscription events: which handlers are registered in webhook setup
    These values populate the "Integration Configuration" section of the report.
@@ -293,8 +293,8 @@ Project Integration Surface:
   Features:          Order Create + Webhook (no Cancel/Refund/Subscription)
   Applicable tests:  order-create, payment-success, payment-failure, order-create-error, webhook-idempotency, pay-method-coverage
   Terminal:          WEB
-  Sub mode:          payment-first (benefits suspended during retry)
-  Checkout mode:     Waffo checkout (no payMethodType in order create)
+  Sub mode:          payment-first (billing resets to payment date, next period not charged after retries; benefits suspended during retry)
+  Checkout selection: Waffo checkout (no payMethodType in order create)
   Currency:          single-currency (USD)
   Sub events:        SUBSCRIPTION_STATUS_NOTIFICATION + SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION + PAYMENT_NOTIFICATION
   APP terminal:      Q6=Yes (iOS+Android), Q7=WebView, Q8=APP passed ✓
@@ -635,7 +635,7 @@ If any check fails, fix the report or continue verification before producing the
 Generate report per `references/acceptance-criteria.md` §4B rules and formal report template. If the hard gate fails, use the §4A blocked summary instead. If the final outcome is `INCOMPLETE`, use the `Verification Failed Summary` instead of the formal report. Include:
 - Overview metadata: `Skill Version`, `Coverage Basis`, `Report Eligibility`
 - Test item results (PASS/FAIL/SKIP/MANUAL/WAFFO_SUPPORT_REQUIRED per item, using descriptive names and split ID columns)
-- Project Integration Surface: project endpoints, auth, webhook business logic, persistence, terminal, and checkout mode
+- Project Integration Surface: project endpoints, auth, webhook business logic, persistence, terminal, and checkout selection
 - Webhook Delivery Evidence: `PROJECT_SIDE_VERIFIED`, `WAFFO_SIDE_VERIFIED`, or `WAFFO_SIDE_UNVERIFIED`
 - Waffo APIs Exercised: actual SDK/API operations invoked during verification
 - Integration Quality Radar: passive code review findings mapped to `PASS`, `MUST_FIX`, `SHOULD_FIX`, `MONITOR`, or `N/A`
