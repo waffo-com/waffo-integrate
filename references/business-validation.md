@@ -27,9 +27,9 @@ Read the project's code and verify these items automatically:
 
 ---
 
-## §2 Business Confirmation Questions (Read Code First, Ask Only If Unclear)
+## §2 Business Confirmation Questions (Ask First, Never Guess)
 
-These questions should be answered by reading existing code, documentation, and competitor implementations first. Only ask the developer if the answer is not clear:
+Ask the developer these questions directly — never guess an answer. If the developer cannot answer, verify against existing code, documentation, and competitor implementations, then state what you found and confirm it with the developer before relying on it. An inferred answer that has not been confirmed must not be treated as settled:
 
 | # | Question | Why It Matters |
 |---|---------|---------------|

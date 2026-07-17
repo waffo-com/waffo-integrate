@@ -58,9 +58,9 @@ Generated code MUST cover these four branches and align with the host project's 
    | `onSubscriptionPeriodChanged` | Extend validity period, reset usage quota, handle renewal failure (e.g., mark past-due, notify user) | "What happens on renewal success/failure?" |
    | `onSubscriptionChange` | Update plan/amount/period in local record, apply prorated changes | "What changes on upgrade/downgrade?" |
 
-   **Fallback rule**: If business logic cannot be inferred from the project's existing code, do NOT silently log and skip. Instead:
+   **Never guess a handler's business logic.** Ask the developer for each handler's rules first; use the project's existing code only to verify or supplement the answer, and confirm any inferred behavior with the developer before using it. If the business logic is still unresolved, do NOT silently log and skip. Instead:
    - Generate a stub with `// ACTION REQUIRED: implement {specific business logic}` comment
-   - **Explicitly ask the developer** in the interactive session: "I cannot infer the business logic for `{handler}` — what should happen when `{event}` is received?"
+   - **Explicitly ask the developer** in the interactive session: "I cannot confirm the business logic for `{handler}` — what should happen when `{event}` is received?"
    - Do NOT treat `// ACTION REQUIRED` as acceptable output — it must be resolved before Step 6 writes code
 
 7. **Thread safety**: Recommend creating a single SDK instance and reusing it (singleton pattern).

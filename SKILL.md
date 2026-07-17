@@ -66,6 +66,8 @@ If ambiguous, ask for the language. Existing projects should reuse their layout 
 
 ## Step 2: Select Features and Context
 
+**Question Policy — never guess (applies to every step, not just Step 2):** For every integration decision — features, user terminal, checkout ownership, subscription mode, currency mode, iframe/device-wallet handling, per-handler webhook business logic, redirect behavior, and every business-confirmation question in Step 6 — ask the developer first. If the developer cannot answer, verify against the project's existing code/config, then state what you found and confirm it with the developer before using it. Never assume a value and proceed silently; even an inferred value must be confirmed with the developer. Reading code is for verification and evidence, never a substitute for confirmation. (Exempt: deterministic repo facts such as language/framework detection — auto-detect these and ask only when ambiguous.)
+
 Ask feature questions one at a time, in this order:
 
 | Feature | Operations |
@@ -95,7 +97,7 @@ Ask these context questions when relevant:
 |-------|-----------------|
 | User terminal | `WEB` or `APP`; if APP, ask external browser vs in-app WebView. APP requires `userTerminal=APP` and makes contracted WeChat Pay / Apple Pay required device tests. |
 | Checkout selection | Integrator checkout passes `payMethodType`/`payMethodName`; Waffo checkout omits them and lets Waffo show methods. |
-| Subscription mode | Payment-first suspends benefits during retry; service-first continues benefits during retry. |
+| Subscription mode | Payment-first: renewal success resets the billing cycle to the actual payment date, and once retries are exhausted the next period is NOT charged; also suspends benefits during retry. Service-first: keeps the original billing anchor, and once retries are exhausted the next period is STILL charged; also keeps benefits during retry. Explain both the billing-cycle/dunning axis and the benefit axis to the developer — see `references/scenario-selection.md`. |
 | Subscription refund | Generate subscription refund code only if needed. |
 | Currency mode | Single-currency may be hardcoded; multi-currency must accept currency as input. |
 | iframe checkout | Add iframe config if used; Apple Pay cannot be used inside iframe. |

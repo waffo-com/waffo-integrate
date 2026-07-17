@@ -268,7 +268,7 @@ Before generating any test, read the project's code to understand:
 
    Record answers for the report. If developer doesn't know (e.g., timeout), try to find the value in project code (HTTP client config, DNS resolver config).
 
-9. **Integration configuration** (from Step 3 answers or inferred from project code):
+9. **Integration configuration** (from the developer's Step 2/3 answers; if any value is missing, verify it in project code and confirm with the developer before recording — do not guess):
    - `userTerminal`: WEB or APP (read from order/subscription create calls)
    - Subscription mode: payment-first or service-first (read from SDK config or handler comments)
    - Checkout mode: Waffo checkout (no `payMethodType`) or integrator checkout (has `payMethodType`)
