@@ -76,16 +76,20 @@ const FEATURE_REQUIRED_DECISIONS = {
 };
 
 const REQUIRED_PHASES = ['A', 'B1', 'B2', 'C1', 'C2', 'D'];
+// Test IDs match references/acceptance-criteria.md §3 (the vocabulary the rest of the skill
+// uses). Pay-method coverage is enforced separately via payMethodInquiry/payMethodCoverage,
+// so it is not double-booked here.
 const FEATURE_REQUIRED_TESTS = {
-  order: ['payment-create', 'payment-inquiry', 'payment-success', 'payment-failure', 'payment-webhook', 'webhook-idempotency'],
+  order: ['order-create', 'order-create-error', 'payment-success', 'payment-failure', 'webhook-idempotency'],
   refund: ['refund-success', 'refund-inquiry', 'refund-webhook'],
   subscription: [
     'subscription-create',
     'subscription-inquiry',
+    'subscription-renewal',
+    'subscription-cancel',
     'subscription-event-status',
     'subscription-event-period-changed',
     'subscription-event-payment',
-    'subscription-cancel',
   ],
   subscriptionChange: ['subscription-change', 'subscription-change-inquiry', 'subscription-event-change'],
 };
@@ -136,14 +140,28 @@ function collectSourceFiles(root) {
   return out;
 }
 
+// Comment/string syntax is language-specific. Getting this wrong produces false
+// positives: e.g. treating `#` as a comment in JS/TS blanks the rest of a line that
+// uses a private field (`this.#ready`), which would hide a real handler registration.
+function commentSyntax(file) {
+  const ext = path.extname(file).toLowerCase();
+  if (ext === '.py') return { slash: false, block: false, hash: true, backtick: false, triple: true };
+  if (ext === '.rb') return { slash: false, block: false, hash: true, backtick: false, triple: false };
+  if (ext === '.php') return { slash: true, block: true, hash: true, backtick: false, triple: false };
+  // C-like family: JS/TS/JSX/TSX/MJS/CJS/Java/Go/Kotlin/C#. `#` is NOT a comment here
+  // (JS private fields, C# preprocessor), and backtick is a string (Go raw strings).
+  return { slash: true, block: true, hash: false, backtick: true, triple: false };
+}
+
 // Produce one view without comments and another without comments or strings.
 // Structural checks use the latter so comments/string constants cannot fake registrations.
-function sanitizeSource(source) {
+function sanitizeSource(source, syntax) {
+  const { slash = true, block = true, hash = false, backtick = true, triple = false } = syntax || {};
   let uncommented = '';
   let structural = '';
   let state = 'code';
   let quote = '';
-  let triple = false;
+  let inTriple = false;
 
   const blank = (ch) => (ch === '\n' ? '\n' : ' ');
   for (let i = 0; i < source.length; i++) {
@@ -170,44 +188,44 @@ function sanitizeSource(source) {
     if (state === 'string') {
       uncommented += ch;
       structural += blank(ch);
-      if (ch === '\\' && !triple && i + 1 < source.length) {
+      if (ch === '\\' && !inTriple && i + 1 < source.length) {
         uncommented += source[i + 1];
         structural += blank(source[i + 1]);
         i++;
         continue;
       }
-      if (triple && source.startsWith(quote.repeat(3), i)) {
+      if (inTriple && source.startsWith(quote.repeat(3), i)) {
         for (let j = 1; j < 3; j++) {
           uncommented += quote;
           structural += ' ';
         }
         i += 2;
         state = 'code';
-        triple = false;
-      } else if (!triple && ch === quote) {
+        inTriple = false;
+      } else if (!inTriple && ch === quote) {
         state = 'code';
       }
       continue;
     }
 
-    if (ch === '/' && next === '/') {
+    if (slash && ch === '/' && next === '/') {
       uncommented += '  ';
       structural += '  ';
       i++;
       state = 'lineComment';
-    } else if (ch === '/' && next === '*') {
+    } else if (block && ch === '/' && next === '*') {
       uncommented += '  ';
       structural += '  ';
       i++;
       state = 'blockComment';
-    } else if (ch === '#') {
+    } else if (hash && ch === '#') {
       uncommented += ' ';
       structural += ' ';
       state = 'lineComment';
-    } else if (ch === '"' || ch === "'" || ch === '`') {
+    } else if (ch === '"' || ch === "'" || (backtick && ch === '`')) {
       quote = ch;
-      triple = ch !== '`' && source.startsWith(ch.repeat(3), i);
-      const width = triple ? 3 : 1;
+      inTriple = triple && ch !== '`' && source.startsWith(ch.repeat(3), i);
+      const width = inTriple ? 3 : 1;
       uncommented += ch.repeat(width);
       structural += ' '.repeat(width);
       i += width - 1;
@@ -226,7 +244,7 @@ function loadCorpus(files) {
     try {
       if (fs.statSync(file).size > MAX_FILE_BYTES) continue;
       const text = fs.readFileSync(file, 'utf8');
-      corpus.push({ file, text, ...sanitizeSource(text) });
+      corpus.push({ file, text, ...sanitizeSource(text, commentSyntax(file)) });
     } catch {
       // An unreadable file cannot be used as positive evidence.
     }

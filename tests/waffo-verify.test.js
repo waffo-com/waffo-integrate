@@ -256,6 +256,55 @@ test('Claude hook rejects fabricated human quotes', () => {
   assert.match(result.stderr, /quote was not found/);
 });
 
+test('JS private-field reference does not hide a handler registration', () => {
+  const root = fixture();
+  write(root, 'src/webhook.js', [
+    'class W {',
+    '  #ready = true;',
+    '  register(w) {',
+    '    if (this.#ready) w.webhook().onSubscriptionPeriodChanged(() => {});',
+    '    w.webhook().onPayment(() => {}).onSubscriptionStatus(() => {});',
+    '    w.subscription().create({});',
+    '  }',
+    '}',
+  ].join('\n'));
+  saveManifest(root, advisoryManifest(['subscription']));
+  const result = runVerify(root);
+  assert.strictEqual(result.status, 0, result.stdout + result.stderr);
+});
+
+test('Python handlers are detected and # comment fakes are rejected', () => {
+  const ok = fixture();
+  write(ok, 'app.py', [
+    'client.subscription().create({})',
+    'client.webhook().on_payment(lambda n: None)',
+    'client.webhook().on_subscription_status(lambda n: None)',
+    'client.webhook().on_subscription_period_changed(lambda n: None)',
+  ].join('\n'));
+  saveManifest(ok, advisoryManifest(['subscription']));
+  assert.strictEqual(runVerify(ok).status, 0, 'real python handlers should pass');
+
+  const bad = fixture();
+  write(bad, 'app.py', [
+    'client.subscription().create({})',
+    'client.webhook().on_payment(lambda n: None).on_subscription_status(lambda n: None)',
+    '# client.webhook().on_subscription_period_changed(lambda n: None)',
+  ].join('\n'));
+  saveManifest(bad, advisoryManifest(['subscription']));
+  const badResult = runVerify(bad);
+  assert.strictEqual(badResult.status, 1);
+  assert.match(badResult.stdout, /onSubscriptionPeriodChanged/);
+});
+
+test('required test ids match acceptance-criteria vocabulary', () => {
+  const orderIds = contract.deriveRequiredTestIds(['order']);
+  assert.ok(orderIds.includes('order-create'), 'order should require order-create');
+  assert.ok(orderIds.includes('order-create-error'), 'order should require order-create-error');
+  assert.ok(!orderIds.includes('payment-create'), 'must not require the old payment-create id');
+  assert.ok(!orderIds.includes('payment-webhook'), 'must not require the old payment-webhook id');
+  assert.ok(contract.deriveRequiredTestIds(['subscription']).includes('subscription-renewal'), 'subscription should require subscription-renewal');
+});
+
 let failures = 0;
 for (const item of tests) {
   try {

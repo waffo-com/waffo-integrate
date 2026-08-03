@@ -122,7 +122,13 @@ Claude hook 会把当前 Claude transcript 传给 validator。validator 必须�
 - `evidence` 每项必须包含 `id`、`runId`、`kind`、`summary`、`capturedAt`。
 - `PASS`、`USED`、`CONDITIONAL` 及人工/支持类结果必须通过 `evidenceIds` 引用 `currentRunId` 下的证据；旧轮证据不能支撑本轮报告。
 - `phases` 必须完整包含 `A`、`B1`、`B2`、`C1`、`C2`、`D`。`PASS`/`CONDITIONAL` 需要证据；`N/A`/`SKIPPED` 需要原因；`FAIL` 和非终态会阻断报告。
-- `tests` 必须覆盖 validator 按 feature 推导的测试 ID。`FAIL`/`PARTIAL` 阻断报告；`MANUAL`、`WAFFO_SUPPORT_REQUIRED`、`SKIP_WITH_REASON`、`N/A` 必须有当前轮证据、原因和下一步，并把结果限制为 `CONDITIONAL`。
+- `tests` 必须覆盖以下按 feature 推导的测试 ID（与 `references/acceptance-criteria.md` §3 词汇一致；pay-method 覆盖由 `payMethodInquiry`/`payMethodCoverage` 单独校验，不在此列）：
+  - `order`：`order-create`、`order-create-error`、`payment-success`、`payment-failure`、`webhook-idempotency`
+  - `refund`：`refund-success`、`refund-inquiry`、`refund-webhook`
+  - `subscription`：`subscription-create`、`subscription-inquiry`、`subscription-renewal`、`subscription-cancel`、`subscription-event-status`、`subscription-event-period-changed`、`subscription-event-payment`
+  - `subscriptionChange`：`subscription-change`、`subscription-change-inquiry`、`subscription-event-change`
+
+  `FAIL`/`PARTIAL` 阻断报告；`MANUAL`、`WAFFO_SUPPORT_REQUIRED`、`SKIP_WITH_REASON`、`N/A` 必须有当前轮证据、原因和下一步，并把结果限制为 `CONDITIONAL`。
 - `payMethodInquiry.status` 必须为 `PASS`；每个 `activeMethods` 条目必须出现在 `payMethodCoverage`。
 - `qualityFindings` 必须包含 `webhookSignatureVerification`、`idempotencyAndLocking`、`unknownStatusRecovery`、`requestIdPersistence`、`refundEntitlementRollback`、`subscriptionEventRouting`、`appIframeCheckoutRisk`。`PASS` 需要当前轮证据；`N/A` 需要当前轮证据和原因；`MUST_FIX` 阻断报告。
 - `blockers` 与 `mustFix` 必须存在；正式报告要求没有 OPEN blocker，且 `mustFix` 为空。
