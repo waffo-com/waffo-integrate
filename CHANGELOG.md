@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.5.0] - 2026-08-03
+
+### Added
+
+- **Executable enforcement layer** (`bin/waffo-verify.js`) — a shipped checker (not just prose) that runs against the merchant project and exits non-zero on violations. It owns the canonical Feature→Required-Handler map and re-derives the required set itself (it does not trust the agent's checklist), greps the project for each handler registration, flags raw 36-char request IDs and order/subscription currency-key contamination, and enforces a report save-gate. Zero runtime dependencies.
+- **`docs/enforcement.md`** — the enforcement contract: `.waffo/integration-manifest.json` schema, T2 (agent runs the checker) usage, and an opt-in T3 Claude Code hook (`--gate report`, exit 2) that mechanically blocks writing an acceptance report until the gate passes. Documents the cross-platform ceiling (Cursor/Codex have no blocking hook) and what each tier can and cannot catch.
+- **`SKILL.md` hard gates**: Required Handler Manifest (single canonical feature→handler source of truth), Human-Decision Gate Register with an explicit **BLOCK-and-stub** unattended terminal behavior (unconfirmed money-affecting decisions emit a runtime-failing `WAFFO_DECISION_REQUIRED` stub, never a silent default — while the decision-independent scaffolding is still generated and only the gated branch is stubbed, not the whole task), and a Report Save Gate. Steps 2/3/5/6 now defer to these instead of restating scattered sets.
+- Evals 20–27: adversarial scenarios that reproduce the real failure *conditions* — unattended silent-default of subscription mode, a handed-in checklist that omits `onSubscriptionPeriodChanged`, soft pressure to emit a report on an incomplete run, unattended fabrication of handler business logic and device-wallet PASS, unknown-status retry pressure, and the Node request-ID / currency-contamination gaps.
+
+### Fixed
+
+- **`references/node.md` shipped code that violated its own rule**: the refund, subscription, and test templates generated request IDs with raw `uuidv4()` (36 chars) despite the file's own 32-char limit (the order-create path was already correct). All now use the 32-char dash-stripped `genRequestId()` pattern.
+- 修复 report gate 的 fail-open：空 feature/decision/phase、`INCOMPLETE` outcome、缺少当前轮证据、支付方式覆盖、OPEN blocker 和 `MUST_FIX` 现在都会阻断正式报告。
+- handler 扫描改为识别移除注释和字符串后的实际 SDK 注册调用，并覆盖 Node、Java、Go、Python 命名；注释伪造不再通过，合法 Go handler 不再误报。
+- Claude Code hook 改为从 stdin 读取官方 hook JSON，覆盖 `Write|Edit`，并使用 `transcript_path` 核对人工 decision quote 是否真实来自用户消息。
+- request ID 检查新增 `randomUUID()`、`UUID.randomUUID()`、`uuid.uuid4()` 和 Go UUID 的原始 36 字符写法。
+- 修复 validator 的注释 tokenizer 按语言区分：`#` 只在 Python/Ruby/PHP 视为注释，不再误伤 JS/TS 私有字段（`this.#x`）而漏报同一行的 handler 注册；`//`、`/* */` 不再在 Python/Ruby 中被误当注释；Ruby/PHP 反引号命令字符串也不会伪造 handler 注册。
+- report gate 的必需 test ID 对齐 `references/acceptance-criteria.md` §3 词汇（`order-create`、`order-create-error`、`subscription-renewal` 等），取代之前未文档化且与 skill 其余部分冲突的 `payment-create`/`payment-inquiry`/`payment-webhook`；完整清单和示例列入 `docs/enforcement.md`，pay-method 覆盖仍由 `payMethodInquiry`/`payMethodCoverage` 单独校验。
+- report gate 要求每个 `PASS`/`USED` test 按场景提交具体业务 `identifiers`；例如 `subscription-event-period-changed` 必须包含 `subscriptionRequest` 和 `subscriptionId`，仅有 `acquiringOrderId` 不能通过。支付方式覆盖的成功结果必须包含 `paymentRequestId` 和 `acquiringOrderId`，占位值会被拒绝。
+- `tests/waffo-verify.test.js` 增补回归：JS 私有字段、Python/Ruby/PHP tokenizer、test-ID 词汇、业务 ID、全 feature 报告和支付方式证据校验（共 24 项）。
+
+### Changed
+
+- `code-generation-rules.md` Guardrail 6 and `business-validation.md` §2 now reference the Human-Decision Gate Register and use the runtime-failing `WAFFO_DECISION_REQUIRED` marker instead of a passive `// ACTION REQUIRED` comment.
+- `bin/install.js` now also installs `bin/waffo-verify.js` and `bin/waffo-claude-hook.js` alongside the Markdown instructions.
+- 新增 `tests/waffo-verify.test.js`，用可执行 fixture 覆盖 report fail-open、注释伪造 handler、Go handler、人工决策、UUID 和 hook transcript 认证。
+
 ## [1.4.4] - 2026-07-17
 
 ### Added

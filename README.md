@@ -46,7 +46,7 @@ Load reference files from .cursor/skills/waffo-integrate/references/ as directed
 
 ### Manual (any AI coding assistant)
 
-Copy the `SKILL.md` and `references/` directory into your project. Point your AI assistant to read `SKILL.md` when integrating Waffo SDK.
+Copy `SKILL.md`, `references/`, `docs/`, and `bin/waffo-verify.js` into the same skill directory. For Claude Code enforcement, also copy `bin/waffo-claude-hook.js`. Point your AI assistant to read `SKILL.md` when integrating Waffo SDK.
 
 ## What it does
 
@@ -78,7 +78,7 @@ Built-in protocol and contract rules prevent common integration mistakes:
 
 Phased Step 7 execution with automatic fix-and-retry:
 
-- **Phase A** — Core tests: order-create, payment-success/failure, webhook-idempotency
+- **Phase A** — 核心测试：`order-create`、`order-create-error`、`payment-success`、`payment-failure`、`webhook-idempotency`
 - **Phase B1/B2** — Pay method coverage: card + non-card (minimum test set from API discovery)
 - **Phase C1** — Refund tests
 - **Phase C2** — Subscription lifecycle tests
@@ -100,6 +100,9 @@ Only the main `SKILL.md` is loaded initially. Language-specific templates, verif
 ```
 waffo-integrate/
 ├── SKILL.md                              # Thin entrypoint + verification/report requirements
+├── bin/
+│   ├── waffo-verify.js                   # Executable integration/report validator
+│   └── waffo-claude-hook.js              # Claude Code stdin hook adapter
 ├── references/
 │   ├── api-contract.md                   # Field definitions + status handling
 │   ├── node.md                           # Node.js/TypeScript templates
@@ -114,14 +117,17 @@ waffo-integrate/
 │   ├── glossary.md                       # 客户可读术语
 │   └── troubleshooting.md                # 按症状排障指南
 ├── docs/
-│   └── INDEX.md                          # Knowledge base index + remote fallback
-└── evals/
-    └── evals.json                        # 16 eval scenarios, 61 assertions
+│   ├── INDEX.md                          # Knowledge base index + remote fallback
+│   └── enforcement.md                    # Manifest schema + hook configuration
+├── evals/
+│   └── evals.json                        # 27 prompt evals, 92 assertions
+└── tests/
+    └── waffo-verify.test.js              # Executable validator/hook regression tests
 ```
 
 ## Evaluation coverage
 
-The repo currently defines 16 eval scenarios and 61 assertions for Anthropic's official [skill-creator](https://github.com/anthropics/claude-code/tree/main/plugins/skill-creator) plugin:
+The repo currently defines 27 prompt eval scenarios and 92 assertions, plus executable validator/hook regression tests:
 
 | Eval | Scenario | Assertions | Result |
 |------|----------|-----------|--------|
@@ -141,6 +147,17 @@ The repo currently defines 16 eval scenarios and 61 assertions for Anthropic's o
 | 14 | Webhook 排障证据收集 | 3 | Defined |
 | 15 | Integration Quality Radar 报告段落 | 4 | Defined |
 | 16 | 在线文档来源优先级 | 3 | Defined |
+| 17 | Ask before choosing subscription mode | 3 | Defined |
+| 18 | Explain both subscription-mode axes | 3 | Defined |
+| 19 | Keep retry policy in Waffo contract config | 2 | Defined |
+| 20 | Block unattended subscription defaults | 3 | Defined |
+| 21 | Re-derive handlers from selected features | 3 | Defined |
+| 22 | Block reports with failed required items | 3 | Defined |
+| 23 | Block fabricated handler business logic | 3 | Defined |
+| 24 | Preserve device-wallet manual evidence | 3 | Defined |
+| 25 | Recover unknown status with same-key inquiry | 3 | Defined |
+| 26 | Generate 32-character Node request IDs | 3 | Defined |
+| 27 | Keep order/subscription field maps separate | 2 | Defined |
 
 ## Requirements
 

@@ -10,6 +10,7 @@ Extended documentation for common scenarios, troubleshooting, and best practices
 
 | Topic | Document | Description |
 |-------|----------|-------------|
+| Executable enforcement | [enforcement.md](enforcement.md) | manifest schema、validator、Claude Code hook 和人工回答 transcript 认证 |
 | Acceptance Criteria | [../references/acceptance-criteria.md](../references/acceptance-criteria.md) | 固定验收标准、Playwright checkout protocol、blocked/failed summary 和正式报告模板 |
 | Product and scenario selection | [../references/scenario-selection.md](../references/scenario-selection.md) | feature、checkout、terminal、subscription mode、iframe、currency 的选择规则 |
 | Glossary | [../references/glossary.md](../references/glossary.md) | 客户可读回复和验收报告使用的中英文术语 |

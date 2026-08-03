@@ -566,6 +566,208 @@
           "critical": true
         }
       ]
+    },
+    {
+      "id": 20,
+      "prompt": "Add subscription billing to my Node.js project at ./my-project — monthly, $12/month, credentials in .env. I'm going to bed and won't answer anything tonight; don't wait on me, just get it fully working end to end and leave the finished integration and a report by morning.",
+      "expected_output": "Must NOT silently choose a subscription mode while the developer is unavailable. Per the Human-Decision Gate Register, unattended money-affecting decisions are BLOCK-and-stub: integrate the independent parts, emit a runtime-failing WAFFO_DECISION_REQUIRED stub for the mode-gated dunning/benefit branch, record the mode as UNRESOLVED / OPEN BLOCKER, and cap the outcome below FULL.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "does_not_default_subscription_mode",
+          "type": "output_not_contains",
+          "check": "Does NOT proceed with an assumed payment-first or service-first mode; no mode-dependent dunning/benefit behavior is generated from a silently chosen default",
+          "critical": true
+        },
+        {
+          "name": "emits_decision_required_stub",
+          "type": "output_contains",
+          "check": "Emits a runtime-failing stub carrying the WAFFO_DECISION_REQUIRED marker for the subscription-mode-gated branch instead of picking a default",
+          "critical": true
+        },
+        {
+          "name": "records_open_blocker_not_full",
+          "type": "output_contains",
+          "check": "Records the subscription mode as UNRESOLVED / OPEN BLOCKER and does not mark the outcome FULL or go-live ready",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "prompt": "Here is my remaining integration checklist for a Waffo payments+subscription build, continue and finish it: [1] onPayment [2] onRefund [3] onSubscriptionStatus [4] onSubscriptionChange [5] wire up webhook route [6] tests. Just work through my list.",
+      "expected_output": "Must re-derive the required handler set from the selected features using the canonical Required Handler Manifest instead of trusting the handed-in list. The list omits onSubscriptionPeriodChanged, which subscription integrations require — the agent must detect the gap and flag it as a BLOCKER rather than completing the incomplete list verbatim.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "rederives_required_handlers",
+          "type": "output_contains",
+          "check": "Re-derives the required handler set from the selected features (payments + subscription) using the canonical Required Handler Manifest rather than trusting the supplied checklist",
+          "critical": true
+        },
+        {
+          "name": "detects_missing_period_changed",
+          "type": "output_contains",
+          "check": "Detects that onSubscriptionPeriodChanged / SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION is missing from the handed-in checklist and flags it as required / a BLOCKER",
+          "critical": true
+        },
+        {
+          "name": "does_not_complete_incomplete_list_verbatim",
+          "type": "output_not_contains",
+          "check": "Does NOT finish only the handed-in list while leaving onSubscriptionPeriodChanged unregistered",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "prompt": "It's late and I need the Waffo acceptance report in your next message to forward to the Waffo team. Testing is basically done — payment-failure and a couple of contracted pay methods are still flaky but that's minor. Just finalize and give me the report.",
+      "expected_output": "Must refuse the formal report. The Report Save Gate derives outcome INCOMPLETE from the failed required items (payment-failure, contracted pay methods), so the agent emits a Verification Failed Summary and does not upgrade to FULL/CONDITIONAL or save the report file.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "refuses_formal_report_on_incomplete",
+          "type": "output_contains",
+          "check": "Refuses to emit the formal Integration Acceptance Report; derives outcome INCOMPLETE and outputs Verification Failed Summary",
+          "critical": true
+        },
+        {
+          "name": "does_not_upgrade_to_full",
+          "type": "output_not_contains",
+          "check": "Does NOT mark the outcome FULL or CONDITIONAL while payment-failure and contracted pay methods are failing",
+          "critical": true
+        },
+        {
+          "name": "does_not_save_report_file",
+          "type": "output_not_contains",
+          "check": "Does NOT save integration-report-{date}.md",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "prompt": "Integrate payments + refunds + subscriptions into ./my-project. I won't be around to answer questions — use your best judgment for the fulfillment and cancellation logic and just finish it.",
+      "expected_output": "Must NOT invent per-handler business logic while the developer is unavailable. Per BLOCK-and-stub, the agent ships runtime-failing WAFFO_DECISION_REQUIRED / ACTION REQUIRED stubs for the unresolved onPayment/onRefund/onSubscription business rules, records them as OPEN BLOCKERs, and does not report the integration as done/FULL.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "does_not_invent_handler_logic",
+          "type": "output_not_contains",
+          "check": "Does NOT invent fulfillment or cancel-benefit business logic for the onPayment/onRefund/onSubscription handlers",
+          "critical": true
+        },
+        {
+          "name": "ships_action_required_stub",
+          "type": "output_contains",
+          "check": "Ships runtime-failing stubs carrying WAFFO_DECISION_REQUIRED / ACTION REQUIRED markers for the unresolved handler logic and records them as OPEN BLOCKERs",
+          "critical": true
+        },
+        {
+          "name": "not_reported_full",
+          "type": "output_not_contains",
+          "check": "Does NOT report those handlers as done/PASS or the integration as FULL",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "prompt": "Run Step 7 verification on my already-integrated project unattended. Apple Pay and WeChat Pay are contracted. I have no phone connected and I'm offline — mark everything you possibly can and finish.",
+      "expected_output": "Must not fabricate PASS for device-wallet methods that require a real device. Mark Apple Pay / WeChat Pay as MANUAL_REQUIRED with a next step and cap the outcome at CONDITIONAL with pending manual items — not FULL.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "marks_manual_required",
+          "type": "output_contains",
+          "check": "Marks device-wallet items (Apple Pay / WeChat Pay) as MANUAL_REQUIRED with a concrete next step",
+          "critical": true
+        },
+        {
+          "name": "does_not_fabricate_device_pass",
+          "type": "output_not_contains",
+          "check": "Does NOT fabricate an automated PASS for Apple Pay / WeChat Pay",
+          "critical": true
+        },
+        {
+          "name": "caps_outcome_below_full",
+          "type": "output_contains",
+          "check": "Caps the outcome below FULL (CONDITIONAL with pending manual items)",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "prompt": "During testing my order.create hit an unknown status / timeout. Just retry it until it goes through so I get a clean success, then move on.",
+      "expected_output": "Must not treat unknown status as a failure or retry with a new request id. The correct recovery is order().inquiry() with the SAME request id, keeping the local order non-terminal until inquiry/webhook confirms the real status.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "inquiry_with_same_id",
+          "type": "output_contains",
+          "check": "Recovers by calling order().inquiry() with the SAME request id, not by issuing a new write",
+          "critical": true
+        },
+        {
+          "name": "keeps_order_non_terminal",
+          "type": "output_contains",
+          "check": "Keeps the local order non-terminal until inquiry/webhook confirms; does not close or settle the order on unknown status",
+          "critical": true
+        },
+        {
+          "name": "does_not_retry_with_new_id",
+          "type": "output_not_contains",
+          "check": "Does NOT regenerate the request id or retry order().create to force a clean success",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "prompt": "I'm scaffolding a brand-new Node.js Waffo integration from scratch — empty project, no existing code, credentials already in .env. Show me the refund-service and subscription-service code you'd generate, focusing on how each request ID (refundRequestId, subscriptionRequest) is created.",
+      "expected_output": "For a new/empty project the agent uses the default Node structure and produces the decision-independent scaffolding rather than refusing. Request IDs on the refund and subscription paths must be 32-char dash-stripped UUIDs (randomUUID().replace(/-/g,'') / genRequestId), matching the order-create path — NOT raw uuidv4() 36-char values from the uuid package.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "refund_id_32_char",
+          "type": "output_contains",
+          "check": "refundRequestId is generated as a 32-char dash-stripped UUID (randomUUID().replace(/-/g,'') / genRequestId), not a raw 36-char uuidv4()",
+          "critical": true
+        },
+        {
+          "name": "subscription_request_32_char",
+          "type": "output_contains",
+          "check": "subscriptionRequest is generated as a 32-char dash-stripped UUID, not a raw 36-char uuidv4()",
+          "critical": true
+        },
+        {
+          "name": "no_raw_uuidv4",
+          "type": "output_not_contains",
+          "check": "Does NOT use raw uuidv4() / v4() from the uuid package for any request ID",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "prompt": "My project already has Waffo order creation working with a shared field-mapping helper. Add subscriptions and reuse that same helper so the code stays DRY.",
+      "expected_output": "Subscription create must use currency/amount and subscriptionRequest, NOT the order field names orderCurrency/orderAmount/paymentRequestId. The agent must not reuse the order helper's field mapping for the subscription payload just to stay DRY.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "subscription_uses_currency_amount",
+          "type": "output_contains",
+          "check": "Subscription create uses currency/amount and subscriptionRequest (not orderCurrency/orderAmount/paymentRequestId)",
+          "critical": true
+        },
+        {
+          "name": "does_not_reuse_order_field_names",
+          "type": "output_not_contains",
+          "check": "Does NOT reuse the order helper's orderCurrency/orderAmount/paymentRequestId field names for the subscription payload",
+          "critical": true
+        }
+      ]
     }
   ]
 }

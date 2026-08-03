@@ -4,10 +4,11 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-// Auto-discover skill files from directories listed in package.json "files"
-// No hardcoded list — adding/renaming files just works.
+// Auto-discover Markdown resources; keep executable files on an explicit allowlist.
 const SKILL_DIRS = ['references', 'docs'];
 const SKILL_ROOT_FILES = ['SKILL.md'];
+// Executable enforcement shipped alongside the instructions (see docs/enforcement.md).
+const SKILL_BIN_FILES = ['bin/waffo-verify.js', 'bin/waffo-claude-hook.js'];
 
 function discoverSkillFiles(srcDir) {
   const files = [...SKILL_ROOT_FILES];
@@ -17,6 +18,9 @@ function discoverSkillFiles(srcDir) {
     for (const file of fs.readdirSync(dirPath)) {
       if (file.endsWith('.md')) files.push(path.join(dir, file));
     }
+  }
+  for (const binFile of SKILL_BIN_FILES) {
+    if (fs.existsSync(path.join(srcDir, binFile))) files.push(binFile);
   }
   return files;
 }
@@ -124,6 +128,7 @@ function main() {
   }
   if (targets.includes('claude')) {
     console.log('  Claude Code: say "integrate waffo" or "接入waffo" to trigger the skill');
+    console.log('  Claude Code report hook: merge the opt-in settings from docs/enforcement.md');
   }
   if (targets.includes('cursor')) {
     console.log('  Cursor: add to .cursorrules:');
