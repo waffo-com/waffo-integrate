@@ -29,6 +29,8 @@ Read the project's code and verify these items automatically:
 
 ## §2 Business Confirmation Questions (Confirm First, Never Guess)
 
+These five questions are money-affecting entries on the **Human-Decision Gate Register** (`SKILL.md`). Each must reach `CONFIRMED_BY_HUMAN` before dependent code is written; when no human can confirm (unattended), apply **BLOCK-and-stub** — emit a `WAFFO_DECISION_REQUIRED` runtime-failing stub, record the item as `UNRESOLVED` in `.waffo/integration-manifest.json`, and cap the outcome below `FULL`. Never take a silent default.
+
 Before asking, check whether the answer is already established by the developer's Step 2 answers or an existing payment-provider integration (see §3). If a high-confidence answer exists in code, propose it with file/line evidence and ask the developer to confirm (yes/no) rather than cold-asking; only cold-ask when neither prior answers nor existing code resolves it. Never treat an unconfirmed inferred answer as settled. For the bug-detection checks below (e.g. Q1, the source of truth for payment results), read the code to verify even if the developer answers — a confident-but-wrong answer would hide the defect:
 
 | # | Question | Why It Matters |

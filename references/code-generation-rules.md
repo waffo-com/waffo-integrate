@@ -58,10 +58,10 @@ Generated code MUST cover these four branches and align with the host project's 
    | `onSubscriptionPeriodChanged` | Extend validity period, reset usage quota, handle renewal failure (e.g., mark past-due, notify user) | "What happens on renewal success/failure?" |
    | `onSubscriptionChange` | Update plan/amount/period in local record, apply prorated changes | "What changes on upgrade/downgrade?" |
 
-   **Never guess a handler's business logic.** Ask the developer for each handler's rules first; use the project's existing code only to verify or supplement the answer, and confirm any inferred behavior with the developer before using it. If the business logic is still unresolved, do NOT silently log and skip. Instead:
-   - Generate a stub with `// ACTION REQUIRED: implement {specific business logic}` comment
-   - **Explicitly ask the developer** in the interactive session: "I cannot confirm the business logic for `{handler}` — what should happen when `{event}` is received?"
-   - Do NOT treat `// ACTION REQUIRED` as acceptable output — it must be resolved before Step 6 writes code
+   **Never guess a handler's business logic.** Each handler's rules are a money-affecting decision on the **Human-Decision Gate Register** (`SKILL.md`). Ask the developer first; reading existing code yields only `READ_FROM_CODE_PENDING_CONFIRMATION`, never a confirmation. If the logic is still unresolved (e.g. the developer is unavailable), apply **BLOCK-and-stub** — do NOT silently log and skip, and do NOT pick a default:
+   - Emit a **runtime-failing** stub carrying the canonical marker, e.g. `throw new Error('WAFFO_DECISION_REQUIRED: {handler} business logic unconfirmed')` (Python `raise`, Go `panic`) — so it fails loudly instead of silently no-op'ing.
+   - Record the decision as `UNRESOLVED` in `.waffo/integration-manifest.json` and as an OPEN BLOCKER; cap the outcome below `FULL`.
+   - `waffo-verify` fails while a `WAFFO_DECISION_REQUIRED` stub is live, and the Report Save Gate blocks a FULL/CONDITIONAL report until it is resolved.
 
 7. **Thread safety**: Recommend creating a single SDK instance and reusing it (singleton pattern).
 

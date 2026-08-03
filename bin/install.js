@@ -8,6 +8,9 @@ const os = require('os');
 // No hardcoded list — adding/renaming files just works.
 const SKILL_DIRS = ['references', 'docs'];
 const SKILL_ROOT_FILES = ['SKILL.md'];
+// Executable enforcement shipped alongside the instructions (see docs/enforcement.md).
+// This is the "program that checks", not another instruction file.
+const SKILL_BIN_FILES = ['bin/waffo-verify.js'];
 
 function discoverSkillFiles(srcDir) {
   const files = [...SKILL_ROOT_FILES];
@@ -17,6 +20,9 @@ function discoverSkillFiles(srcDir) {
     for (const file of fs.readdirSync(dirPath)) {
       if (file.endsWith('.md')) files.push(path.join(dir, file));
     }
+  }
+  for (const binFile of SKILL_BIN_FILES) {
+    if (fs.existsSync(path.join(srcDir, binFile))) files.push(binFile);
   }
   return files;
 }

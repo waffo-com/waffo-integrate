@@ -40,10 +40,56 @@ Never assume an integration value and proceed silently. Separate two classes of 
 
 Exempt from asking: which language/framework the repo uses (auto-detect; the framework generation target is still confirmed per Step 3) and the §1 Code Check List audit of already-written code.
 
+## Enforcement Layer (not just prose)
+
+This skill ships an executable checker, `bin/waffo-verify.js`, installed next to these files. Instructions alone are advisory and drift in long or unattended sessions; the checker gives the completeness and report rules real teeth. Two obligations apply to every integration:
+
+1. **Emit `.waffo/integration-manifest.json`** in the merchant project (schema: `docs/enforcement.md`). It records selected `features`, each money-affecting `decisions` entry with its confirmation status, Step 6 `phases`, and the final `outcome`. This is the machine-checkable surface — keep it current as you integrate.
+2. **Run the checker** in the project root after writing code (Step 5) and before any report (Step 6): `node <skill-dir>/bin/waffo-verify.js .` — resolve every `ERROR` before continuing. It can also run as a Claude Code hook to block the report write mechanically (`--gate report`, exit 2); see `docs/enforcement.md`. Cursor/Codex have no blocking hook, so the agent running the checker is the enforcement ceiling there.
+
+The three gates below define what the checker and the report enforce.
+
+## Required Handler Manifest
+
+Derive the required webhook handler/event set from the selected features using this single canonical map — never from a checklist you summarized or were handed:
+
+| Feature selected | Required handlers | Required notification events (Step 6) |
+|---|---|---|
+| Order Payment | `onPayment` | `PAYMENT_NOTIFICATION` |
+| Refund | `onRefund` | `REFUND_NOTIFICATION` |
+| Subscription | `onSubscriptionStatus`, `onSubscriptionPeriodChanged`, subscription-aware `onPayment` | `SUBSCRIPTION_STATUS_NOTIFICATION`, `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION`, `PAYMENT_NOTIFICATION` |
+| Subscription Change (upgrade/downgrade) | `onSubscriptionChange` | `SUBSCRIPTION_CHANGE_NOTIFICATION` |
+
+Before presenting code (Step 4) and before the report (Step 6), reconcile this required set against what is actually registered in the project and record it in the manifest. `waffo-verify` re-derives this set from `features` and greps the project for each registration; a missing required handler is a BLOCKER that caps the outcome below `FULL`. Step 2, Step 3, Phase C2, and the report's Subscription Event Coverage all defer to this table — do not restate a different set anywhere.
+
+## Human-Decision Gate Register
+
+Money-affecting decisions are owned by the developer, never chosen by the agent. Each must reach `CONFIRMED_BY_HUMAN` (quote the developer's answer as evidence) before any dependent code is written; reading existing code yields only `READ_FROM_CODE_PENDING_CONFIRMATION`, never a confirmation. Registered decisions:
+
+- Subscription mode (payment-first vs service-first) — explain both the billing-cycle/dunning axis and the benefit axis
+- The five business-confirmation questions in `references/business-validation.md` §2 (payment source-of-truth, cancel-benefit timing, full/partial refund benefit, `WaffoUnknownStatusError` handling, upgrade/downgrade proration)
+- Per-handler business logic (`onPayment` / `onRefund` / `onSubscription*` fulfillment and revoke rules)
+- `userTerminal`, checkout ownership, currency mode, iframe/device-wallet handling, redirect behavior
+- Go-Live Q1–Q8, compliance exemption (`goodsUrl` / `appName`), subscription retry config
+
+**Unattended terminal behavior (no human available) = BLOCK-and-stub.** When a decision cannot be confirmed by a human (developer asleep/away, told to proceed autonomously), do NOT pick a default — and do NOT refuse the whole task. Instead:
+
+1. **Still produce all decision-independent work** — SDK wiring, `create`/`inquiry`/`cancel` calls, field mapping, 32-char request-ID generation, handler registration, persistence — for every selected feature (use the language reference's default structure for a new or empty project). A decision blocks only the branch whose behavior it controls; refusing to write the surrounding code that does not depend on it is over-blocking, and just as unhelpful as a silent default.
+2. Emit a runtime-failing stub for the gated branch carrying the marker `WAFFO_DECISION_REQUIRED` — e.g. `throw new Error('WAFFO_DECISION_REQUIRED: subscription mode unconfirmed')`.
+3. Record the decision as `UNRESOLVED` in the manifest and as an OPEN BLOCKER in the report.
+4. Cap the outcome at `CONDITIONAL` / `INCOMPLETE` — never `FULL`.
+
+The target is a working integration with the gated branches loudly stubbed — not a silent default, and not an empty refusal. A silent default silently ships wrong money-affecting behavior; a blanket refusal to scaffold the decision-independent code is the opposite failure. `waffo-verify` fails when an `UNRESOLVED` decision has no live stub, and the report gate blocks a `FULL`/`CONDITIONAL` outcome while any stub or unresolved decision remains.
+
+## Report Save Gate
+
+Before printing OR saving `integration-report-{YYYYMMDD}.md`, the manifest must pass: every phase has a terminal state, every required test item has a status + evidence id, `payMethodConfig().inquiry()` succeeded, every PASS/USED row carries a current-run evidence id, zero OPEN BLOCKERs, zero `MUST_FIX`, and no live `WAFFO_DECISION_REQUIRED` stub. Derive `FULL`/`CONDITIONAL`/`INCOMPLETE` from this manifest — any required fail, OPEN BLOCKER, or `MUST_FIX` forces the outcome below `FULL`. If it fails, emit only the Verification Blocked/Failed Summary and do not write the file. `node <skill-dir>/bin/waffo-verify.js . --gate report` enforces this mechanically (exit 2) when wired as a hook. Full report rules: `references/acceptance-criteria.md` §4.
+
 ## Reference Loading Map
 
 | Need | Load |
 |------|------|
+| Executable enforcement: manifest schema, verify script, opt-in hook | `docs/enforcement.md` |
 | Wire fields, enum values, required params | `references/api-contract.md` |
 | Generated-code guardrails and tricky Waffo rules | `references/code-generation-rules.md` |
 | Node.js integration patterns | `references/node.md` |
@@ -87,14 +133,7 @@ Ask feature questions one at a time, in this order:
 
 Python uses snake_case for these method names (`change_inquiry`, `merchant_config`, `pay_method_config`, `on_payment`, `on_subscription_status`, etc.) and snake_case for `Waffo.from_env()` / `WaffoConfig`. Payload **dict keys remain camelCase** in every language because the SDK sends them through to the API verbatim.
 
-Webhook is mandatory for payment integrations. Do not ask whether to add webhook; derive handlers from selected features:
-
-| Selected Feature | Register Handlers |
-|------------------|-------------------|
-| Order Payment | `onPayment` |
-| Refund | `onRefund` |
-| Subscription | `onSubscriptionStatus`, `onSubscriptionPeriodChanged`, subscription-aware `onPayment` for `PAYMENT_NOTIFICATION` |
-| Subscription Change | `onSubscriptionChange` |
+Webhook is mandatory for payment integrations. Do not ask whether to add webhook; derive the handler set from the canonical **Required Handler Manifest** (top of this file) — it is the single source of truth, and the required-vs-registered result must be recorded in `.waffo/integration-manifest.json`.
 
 When both order payment and subscription are integrated, route `PAYMENT_NOTIFICATION` by `paymentInfo.productName`: the one-time payment branch must not fulfill subscription payments, but subscription billing attempts/retries must still be handled or recorded and tested.
 
@@ -123,7 +162,7 @@ Since webhook is auto-included, ask for the web framework when order payment or 
 | Go | Gin | Echo, Fiber, Chi |
 | Python | FastAPI | Flask, Django |
 
-For subscription integrations, default to and test `SUBSCRIPTION_STATUS_NOTIFICATION`, `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION`, and `PAYMENT_NOTIFICATION`. Add `SUBSCRIPTION_CHANGE_NOTIFICATION` only when subscription upgrade/downgrade is integrated.
+For subscription event coverage, use the required events from the canonical **Required Handler Manifest** (top of this file); add `SUBSCRIPTION_CHANGE_NOTIFICATION` only when subscription upgrade/downgrade is integrated. Do not restate a different set here.
 
 ## Step 4: Present Code for Review
 
@@ -161,7 +200,8 @@ After developer approval:
 1. Install the SDK dependency using the language package manager.
 2. Add files into the project's existing architecture; use default structures from language references only for new or empty projects.
 3. Run the project's build/check command (`npm run build`, `mvn compile`, `go build ./...`, `python -m compileall .` or `ruff check && mypy`, etc.).
-4. After build success, immediately start integration verification in the same response. Do not stop at “build passed” unless credentials, server, tunnel, or auth are missing.
+4. Emit or update `.waffo/integration-manifest.json`, then run `node <skill-dir>/bin/waffo-verify.js .` in the project root. Treat every `ERROR` as a blocker — fix the code (missing required handler, `UNRESOLVED` decision without a `WAFFO_DECISION_REQUIRED` stub, 36-char request ID, field contamination) and re-run until clean.
+5. After build success and a clean checker run, immediately start integration verification in the same response. Do not stop at “build passed” unless credentials, server, tunnel, or auth are missing.
 
 SDK installation must use the current package version:
 
@@ -198,6 +238,8 @@ The minimum pay-method set comes from active contracted methods returned by `pay
 `payMethodConfig().inquiry()` using the project's Sandbox credentials is mandatory before pay-method coverage and before a formal report can be generated. If active contracted methods cannot be retrieved, output `Verification Blocked Summary` instead of a formal report.
 
 Checkpoint after each phase with a compact summary: tests run, PASS count, non-PASS items, order IDs created, and whether any dependent phase is blocked. Phase D may not start until all prior phases have final states.
+
+Before Phase D writes any report, run `node <skill-dir>/bin/waffo-verify.js . --gate report`. A non-zero (exit 2) result blocks the report per the **Report Save Gate** — resolve the reported blockers, update `.waffo/integration-manifest.json`, and re-run until it passes.
 
 ## Failure Loop and Support Escalation
 

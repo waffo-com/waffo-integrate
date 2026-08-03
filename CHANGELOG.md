@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.5.0] - 2026-08-03
+
+### Added
+
+- **Executable enforcement layer** (`bin/waffo-verify.js`) — a shipped checker (not just prose) that runs against the merchant project and exits non-zero on violations. It owns the canonical Feature→Required-Handler map and re-derives the required set itself (it does not trust the agent's checklist), greps the project for each handler registration, flags raw 36-char request IDs and order/subscription currency-key contamination, and enforces a report save-gate. Zero runtime dependencies.
+- **`docs/enforcement.md`** — the enforcement contract: `.waffo/integration-manifest.json` schema, T2 (agent runs the checker) usage, and an opt-in T3 Claude Code hook (`--gate report`, exit 2) that mechanically blocks writing an acceptance report until the gate passes. Documents the cross-platform ceiling (Cursor/Codex have no blocking hook) and what each tier can and cannot catch.
+- **`SKILL.md` hard gates**: Required Handler Manifest (single canonical feature→handler source of truth), Human-Decision Gate Register with an explicit **BLOCK-and-stub** unattended terminal behavior (unconfirmed money-affecting decisions emit a runtime-failing `WAFFO_DECISION_REQUIRED` stub, never a silent default — while the decision-independent scaffolding is still generated and only the gated branch is stubbed, not the whole task), and a Report Save Gate. Steps 2/3/5/6 now defer to these instead of restating scattered sets.
+- Evals 20–27: adversarial scenarios that reproduce the real failure *conditions* — unattended silent-default of subscription mode, a handed-in checklist that omits `onSubscriptionPeriodChanged`, soft pressure to emit a report on an incomplete run, unattended fabrication of handler business logic and device-wallet PASS, unknown-status retry pressure, and the Node request-ID / currency-contamination gaps.
+
+### Fixed
+
+- **`references/node.md` shipped code that violated its own rule**: the refund, subscription, and test templates generated request IDs with raw `uuidv4()` (36 chars) despite the file's own 32-char limit (the order-create path was already correct). All now use the 32-char dash-stripped `genRequestId()` pattern.
+
+### Changed
+
+- `code-generation-rules.md` Guardrail 6 and `business-validation.md` §2 now reference the Human-Decision Gate Register and use the runtime-failing `WAFFO_DECISION_REQUIRED` marker instead of a passive `// ACTION REQUIRED` comment.
+- `bin/install.js` now also installs `bin/waffo-verify.js` alongside the Markdown instructions.
+
 ## [1.4.4] - 2026-07-17
 
 ### Added
