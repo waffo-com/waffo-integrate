@@ -146,7 +146,12 @@ export async function captureOrder(paymentRequestId: string, merchantId: string,
 ```typescript
 // src/services/refund-service.ts
 import { getWaffo } from '../config/waffo';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
+
+/** Generate a 32-char request ID (UUID without dashes, max length 32) */
+function genRequestId(): string {
+  return randomUUID().replace(/-/g, '');
+}
 
 export async function refundOrder(
   acquiringOrderId: string,
@@ -155,7 +160,7 @@ export async function refundOrder(
 ) {
   const waffo = getWaffo();
   const response = await waffo.order().refund({
-    refundRequestId: uuidv4(),
+    refundRequestId: genRequestId(),
     acquiringOrderId,
     refundAmount,
     refundReason,
@@ -187,7 +192,12 @@ export async function queryRefund(refundRequestId: string) {
 ```typescript
 // src/services/subscription-service.ts
 import { getWaffo } from '../config/waffo';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
+
+/** Generate a 32-char request ID (UUID without dashes, max length 32) */
+function genRequestId(): string {
+  return randomUUID().replace(/-/g, '');
+}
 
 export interface CreateSubscriptionInput {
   merchantSubscriptionId: string;
@@ -209,7 +219,7 @@ export interface CreateSubscriptionInput {
 export async function createSubscription(input: CreateSubscriptionInput) {
   const waffo = getWaffo();
   const response = await waffo.subscription().create({
-    subscriptionRequest: uuidv4(),
+    subscriptionRequest: genRequestId(),
     merchantSubscriptionId: input.merchantSubscriptionId,
     currency: input.currency,
     amount: input.amount,
@@ -299,7 +309,7 @@ export interface ChangeSubscriptionInput {
 export async function changeSubscription(input: ChangeSubscriptionInput) {
   const waffo = getWaffo();
   const response = await waffo.subscription().change({
-    subscriptionRequest: uuidv4(),
+    subscriptionRequest: genRequestId(),
     originSubscriptionRequest: input.originSubscriptionRequest,
     remainingAmount: input.remainingAmount,
     currency: input.currency,
@@ -514,7 +524,10 @@ export async function waffoWebhookRoute(fastify: FastifyInstance) {
 // tests/payment.test.ts
 import { describe, it, expect } from 'vitest';  // or jest
 import { Waffo, Environment } from '@waffo/waffo-node';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
+
+/** 32-char request ID (UUID without dashes, max length 32) */
+const genRequestId = () => randomUUID().replace(/-/g, '');
 
 const HAS_CREDENTIALS = !!(
   process.env.WAFFO_API_KEY &&
@@ -538,7 +551,7 @@ function createWaffo(): Waffo {
 describe('Waffo Payment Integration', () => {
   conditionalIt('creates a payment order', async () => {
     const waffo = createWaffo();
-    const paymentRequestId = uuidv4();
+    const paymentRequestId = genRequestId();
 
     const response = await waffo.order().create({
       paymentRequestId,
@@ -565,7 +578,7 @@ describe('Waffo Payment Integration', () => {
 
   conditionalIt('queries an order', async () => {
     const waffo = createWaffo();
-    const paymentRequestId = uuidv4();
+    const paymentRequestId = genRequestId();
 
     // Create first
     await waffo.order().create({
