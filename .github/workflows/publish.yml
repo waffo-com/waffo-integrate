@@ -41,6 +41,9 @@ jobs:
           fi
           echo "All internal links valid."
 
+      - name: Run enforcement regression tests
+        run: npm test
+
       - name: Debug npm publish context
         run: |
           echo "package: $(node -p "require('./package.json').name")"

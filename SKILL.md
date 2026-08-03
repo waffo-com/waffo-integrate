@@ -40,18 +40,18 @@ Never assume an integration value and proceed silently. Separate two classes of 
 
 Exempt from asking: which language/framework the repo uses (auto-detect; the framework generation target is still confirmed per Step 3) and the §1 Code Check List audit of already-written code.
 
-## Enforcement Layer (not just prose)
+## 可执行约束层
 
-This skill ships an executable checker, `bin/waffo-verify.js`, installed next to these files. Instructions alone are advisory and drift in long or unattended sessions; the checker gives the completeness and report rules real teeth. Two obligations apply to every integration:
+本 Skill 随安装包提供 `bin/waffo-verify.js`。Markdown 负责说明流程，validator 负责检查可以机械核对的集成事实。每次集成都必须完成两项动作：
 
-1. **Emit `.waffo/integration-manifest.json`** in the merchant project (schema: `docs/enforcement.md`). It records selected `features`, each money-affecting `decisions` entry with its confirmation status, Step 6 `phases`, and the final `outcome`. This is the machine-checkable surface — keep it current as you integrate.
-2. **Run the checker** in the project root after writing code (Step 5) and before any report (Step 6): `node <skill-dir>/bin/waffo-verify.js .` — resolve every `ERROR` before continuing. It can also run as a Claude Code hook to block the report write mechanically (`--gate report`, exit 2); see `docs/enforcement.md`. Cursor/Codex have no blocking hook, so the agent running the checker is the enforcement ceiling there.
+1. 在商户项目生成并持续更新 `.waffo/integration-manifest.json`，schema 见 `docs/enforcement.md`。manifest 必须记录 feature、人工 decision、当前轮 evidence、phase、test、支付方式覆盖、质量检查、blocker、`MUST_FIX` 和 outcome。
+2. 写完代码后以及输出任何报告前，在项目根目录运行 `node <skill-dir>/bin/waffo-verify.js .`。所有 `ERROR` 清零后才能继续；正式报告还必须运行 `node <skill-dir>/bin/waffo-verify.js . --gate report`。
 
-The three gates below define what the checker and the report enforce.
+Claude Code 可选配 `bin/waffo-claude-hook.js`：它在 Write/Edit 正式报告前机械运行 report gate，并从 transcript 认证人工回答原话。Cursor/Codex 没有同等 hook 时，主动运行 validator 是当前宿主的约束上限。完整配置见 `docs/enforcement.md`。
 
-## Required Handler Manifest
+## 必需 Handler 清单
 
-Derive the required webhook handler/event set from the selected features using this single canonical map — never from a checklist you summarized or were handed:
+必须从选定 feature 重新推导 webhook handler/event；不得使用 AI 自己简化的 checklist，也不得原样信任外部传入的残缺 checklist：
 
 | Feature selected | Required handlers | Required notification events (Step 6) |
 |---|---|---|
@@ -60,11 +60,11 @@ Derive the required webhook handler/event set from the selected features using t
 | Subscription | `onSubscriptionStatus`, `onSubscriptionPeriodChanged`, subscription-aware `onPayment` | `SUBSCRIPTION_STATUS_NOTIFICATION`, `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION`, `PAYMENT_NOTIFICATION` |
 | Subscription Change (upgrade/downgrade) | `onSubscriptionChange` | `SUBSCRIPTION_CHANGE_NOTIFICATION` |
 
-Before presenting code (Step 4) and before the report (Step 6), reconcile this required set against what is actually registered in the project and record it in the manifest. `waffo-verify` re-derives this set from `features` and greps the project for each registration; a missing required handler is a BLOCKER that caps the outcome below `FULL`. Step 2, Step 3, Phase C2, and the report's Subscription Event Coverage all defer to this table — do not restate a different set anywhere.
+Step 4 展示代码前和 Step 6 报告前，都要把必需集合与项目中的实际 SDK 注册调用逐项核对。`waffo-verify` 会忽略 manifest 自报的 handler、移除注释和字符串，并按 `features` 独立扫描 Node/Java/Go/Python 注册调用；缺少任一 handler 都会阻断正式报告。
 
-## Human-Decision Gate Register
+## 人工决策登记
 
-Money-affecting decisions are owned by the developer, never chosen by the agent. Each must reach `CONFIRMED_BY_HUMAN` (quote the developer's answer as evidence) before any dependent code is written; reading existing code yields only `READ_FROM_CODE_PENDING_CONFIRMATION`, never a confirmation. Registered decisions:
+影响资金或权益的 decision 由开发者决定，AI 不得代答。依赖该决策的代码开始前，每项都必须达到 `CONFIRMED_BY_HUMAN`，并在 `evidence.quote` 逐字记录开发者回答；从代码读到的候选答案只能标记为 `READ_FROM_CODE_PENDING_CONFIRMATION`。必答 ID 及 feature 映射以 `docs/enforcement.md` 为准，覆盖以下主题：
 
 - Subscription mode (payment-first vs service-first) — explain both the billing-cycle/dunning axis and the benefit axis
 - The five business-confirmation questions in `references/business-validation.md` §2 (payment source-of-truth, cancel-benefit timing, full/partial refund benefit, `WaffoUnknownStatusError` handling, upgrade/downgrade proration)
@@ -72,18 +72,27 @@ Money-affecting decisions are owned by the developer, never chosen by the agent.
 - `userTerminal`, checkout ownership, currency mode, iframe/device-wallet handling, redirect behavior
 - Go-Live Q1–Q8, compliance exemption (`goodsUrl` / `appName`), subscription retry config
 
-**Unattended terminal behavior (no human available) = BLOCK-and-stub.** When a decision cannot be confirmed by a human (developer asleep/away, told to proceed autonomously), do NOT pick a default — and do NOT refuse the whole task. Instead:
+**无人回答时执行 BLOCK-and-stub。** 开发者离线、睡觉或要求自主继续时，AI 仍然不能选择默认答案。此时按以下方式推进：
 
-1. **Still produce all decision-independent work** — SDK wiring, `create`/`inquiry`/`cancel` calls, field mapping, 32-char request-ID generation, handler registration, persistence — for every selected feature (use the language reference's default structure for a new or empty project). A decision blocks only the branch whose behavior it controls; refusing to write the surrounding code that does not depend on it is over-blocking, and just as unhelpful as a silent default.
-2. Emit a runtime-failing stub for the gated branch carrying the marker `WAFFO_DECISION_REQUIRED` — e.g. `throw new Error('WAFFO_DECISION_REQUIRED: subscription mode unconfirmed')`.
-3. Record the decision as `UNRESOLVED` in the manifest and as an OPEN BLOCKER in the report.
-4. Cap the outcome at `CONDITIONAL` / `INCOMPLETE` — never `FULL`.
+1. 继续完成不依赖该 decision 的 SDK wiring、`create`/`inquiry`/`cancel`、字段映射、32 字符 request ID、handler 注册和持久化。
+2. 在受影响分支写入会明确失败的 `WAFFO_DECISION_REQUIRED` runtime stub，例如 `throw new Error('WAFFO_DECISION_REQUIRED: subscription mode unconfirmed')`。
+3. 在 manifest 将该项记为 `UNRESOLVED`，并登记 OPEN blocker。
+4. 将 outcome 设为 `INCOMPLETE`，只允许输出 Verification Blocked/Failed Summary。
 
-The target is a working integration with the gated branches loudly stubbed — not a silent default, and not an empty refusal. A silent default silently ships wrong money-affecting behavior; a blanket refusal to scaffold the decision-independent code is the opposite failure. `waffo-verify` fails when an `UNRESOLVED` decision has no live stub, and the report gate blocks a `FULL`/`CONDITIONAL` outcome while any stub or unresolved decision remains.
+Claude hook 会在当前 transcript 的真实 `user` 消息中查找每个 `CONFIRMED_BY_HUMAN` 的 `evidence.quote`。AI 自己写入确认状态、伪造回答或遗漏整个 decision 数组都会被阻断。没有 transcript hook 的宿主只能校验 evidence 结构，不能机械认证回答者身份。
 
-## Report Save Gate
+## 报告保存准入
 
-Before printing OR saving `integration-report-{YYYYMMDD}.md`, the manifest must pass: every phase has a terminal state, every required test item has a status + evidence id, `payMethodConfig().inquiry()` succeeded, every PASS/USED row carries a current-run evidence id, zero OPEN BLOCKERs, zero `MUST_FIX`, and no live `WAFFO_DECISION_REQUIRED` stub. Derive `FULL`/`CONDITIONAL`/`INCOMPLETE` from this manifest — any required fail, OPEN BLOCKER, or `MUST_FIX` forces the outcome below `FULL`. If it fails, emit only the Verification Blocked/Failed Summary and do not write the file. `node <skill-dir>/bin/waffo-verify.js . --gate report` enforces this mechanically (exit 2) when wired as a hook. Full report rules: `references/acceptance-criteria.md` §4.
+打印或保存 `integration-report-{YYYYMMDD}.md` 前必须执行 `node <skill-dir>/bin/waffo-verify.js . --gate report`。validator 必须确认：
+
+- feature 非空，必需 handler 是实际 SDK 注册调用，必答 decision 完整且已由用户确认；
+- A、B1、B2、C1、C2、D 全部终态，必需 test 完整；
+- 每个 PASS/USED/CONDITIONAL 结果以及 tests/quality 中的 N/A 结果引用当前 `currentRunId` 的 evidence；
+- `payMethodConfig().inquiry()` 成功，每个 active method 都有 coverage；
+- Quality Radar 必需项完整，没有 `MUST_FIX`、OPEN blocker 或 live `WAFFO_DECISION_REQUIRED` stub；
+- outcome 为 `FULL` 或 `CONDITIONAL`，且与测试和质量结果一致。
+
+任一条件不满足时，只输出 Verification Blocked/Failed Summary，不打印正式报告正文，也不写报告文件。完整 schema 和 hook 配置见 `docs/enforcement.md`；报告格式见 `references/acceptance-criteria.md` §4。
 
 ## Reference Loading Map
 
@@ -133,7 +142,7 @@ Ask feature questions one at a time, in this order:
 
 Python uses snake_case for these method names (`change_inquiry`, `merchant_config`, `pay_method_config`, `on_payment`, `on_subscription_status`, etc.) and snake_case for `Waffo.from_env()` / `WaffoConfig`. Payload **dict keys remain camelCase** in every language because the SDK sends them through to the API verbatim.
 
-Webhook is mandatory for payment integrations. Do not ask whether to add webhook; derive the handler set from the canonical **Required Handler Manifest** (top of this file) — it is the single source of truth, and the required-vs-registered result must be recorded in `.waffo/integration-manifest.json`.
+Webhook is mandatory for payment integrations. Do not ask whether to add webhook; derive the handler set from the canonical **必需 Handler 清单** (top of this file) — it is the single source of truth, and the required-vs-registered result must be recorded in `.waffo/integration-manifest.json`.
 
 When both order payment and subscription are integrated, route `PAYMENT_NOTIFICATION` by `paymentInfo.productName`: the one-time payment branch must not fulfill subscription payments, but subscription billing attempts/retries must still be handled or recorded and tested.
 

@@ -5,12 +5,16 @@
   "bin": {
     "waffo-integrate": "./bin/install.js"
   },
+  "scripts": {
+    "test": "node tests/waffo-verify.test.js"
+  },
   "files": [
     "bin/",
     "SKILL.md",
     "CHANGELOG.md",
     "references/",
-    "docs/"
+    "docs/",
+    "tests/"
   ],
   "keywords": [
     "waffo",
