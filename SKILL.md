@@ -87,7 +87,7 @@ Claude hook 会在当前 transcript 的真实 `user` 消息中查找每个 `CONF
 
 - feature 非空，必需 handler 是实际 SDK 注册调用，必答 decision 完整且已由用户确认；
 - A、B1、B2、C1、C2、D 全部终态，必需 test 完整；
-- 每个 PASS/USED/CONDITIONAL 结果以及 tests/quality 中的 N/A 结果引用当前 `currentRunId` 的 evidence；
+- 每个 PASS/USED/CONDITIONAL 结果以及 tests/quality 中的 N/A 结果引用当前 `currentRunId` 的 evidence；每个 PASS/USED test 按 `docs/enforcement.md` 的映射记录真实 `identifiers`；
 - `payMethodConfig().inquiry()` 成功，每个 active method 都有 coverage；
 - Quality Radar 必需项完整，没有 `MUST_FIX`、OPEN blocker 或 live `WAFFO_DECISION_REQUIRED` stub；
 - outcome 为 `FULL` 或 `CONDITIONAL`，且与测试和质量结果一致。
@@ -189,7 +189,7 @@ Preview must show how these behaviors are handled:
 | Idempotency | Request IDs generated, persisted before Waffo write calls, and returned to callers |
 | Unknown status | Same-key inquiry recovery for create/refund/cancel/subscription writes |
 | Webhook | Signature verification, signed response, idempotency, locking, and business transaction |
-| Persistence | `acquiringOrderID`, `refundRequestId`, `subscriptionRequest`, and `subscriptionID` storage where applicable |
+| 持久化 | 在适用场景持久化 `acquiringOrderId`、`refundRequestId`、`subscriptionRequest` 和 `subscriptionId` |
 | Redirects | Success, failed, and cancel URLs set for checkout flows |
 | Pay methods | `payMethodType`/`payMethodName` behavior matches checkout selection decision |
 

@@ -12,6 +12,14 @@ const contract = require('../bin/waffo-verify.js');
 const VERIFY = path.resolve(__dirname, '..', 'bin', 'waffo-verify.js');
 const HOOK = path.resolve(__dirname, '..', 'bin', 'waffo-claude-hook.js');
 const roots = [];
+const IDENTIFIER_VALUES = {
+  paymentRequestId: 'payreq-20260803-0001',
+  acquiringOrderId: 'acq-20260803-0001',
+  refundRequestId: 'refund-20260803-0001',
+  originSubscriptionRequest: 'subreq-20260803-origin',
+  subscriptionRequest: 'subreq-20260803-new',
+  subscriptionId: 'sub-20260803-0001',
+};
 
 function fixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'waffo-verify-test-'));
@@ -38,6 +46,10 @@ function decisions(features) {
   }));
 }
 
+function identifiers(fields) {
+  return Object.fromEntries(fields.map((field) => [field, IDENTIFIER_VALUES[field]]));
+}
+
 function manifest(features) {
   const runId = 'run-20260803';
   const evidenceId = 'evidence-current-run';
@@ -59,9 +71,19 @@ function manifest(features) {
         : { status: 'N/A', reason: 'subscription not integrated' },
       D: { status: 'PASS', evidenceIds: [evidenceId] },
     },
-    tests: requiredTests.map((id) => ({ id, status: 'PASS', evidenceIds: [evidenceId] })),
+    tests: requiredTests.map((id) => ({
+      id,
+      status: 'PASS',
+      identifiers: identifiers(contract.TEST_IDENTIFIER_REQUIREMENTS[id] || []),
+      evidenceIds: [evidenceId],
+    })),
     payMethodInquiry: { status: 'PASS', evidenceIds: [evidenceId], activeMethods: [{ id: 'CARD' }] },
-    payMethodCoverage: [{ methodId: 'CARD', status: 'PASS', evidenceIds: [evidenceId] }],
+    payMethodCoverage: [{
+      methodId: 'CARD',
+      status: 'PASS',
+      identifiers: identifiers(contract.PAY_METHOD_REQUIRED_IDENTIFIERS),
+      evidenceIds: [evidenceId],
+    }],
     qualityFindings: contract.REQUIRED_QUALITY_CHECKS.map((id) => ({ id, riskLevel: 'PASS', evidenceIds: [evidenceId] })),
     blockers: [],
     mustFix: [],
@@ -93,6 +115,26 @@ test('valid Node report manifest passes', () => {
   const root = fixture();
   write(root, 'src/integration.js', 'waffo.order().create({ paymentRequestId: crypto.randomUUID().replace(/-/g, "") });\nwaffo.webhook().onPayment(() => {});\n');
   saveManifest(root, manifest(['order']));
+  const result = runVerify(root, '--gate', 'report');
+  assert.strictEqual(result.status, 0, result.stderr);
+});
+
+test('valid full-feature report with business identifiers passes', () => {
+  const root = fixture();
+  write(root, 'src/integration.js', [
+    'waffo.order().create({});',
+    'waffo.order().refund({});',
+    'waffo.refund().inquiry({});',
+    'waffo.subscription().create({});',
+    'waffo.subscription().change({});',
+    'waffo.webhook()',
+    '  .onPayment(() => {})',
+    '  .onRefund(() => {})',
+    '  .onSubscriptionStatus(() => {})',
+    '  .onSubscriptionPeriodChanged(() => {})',
+    '  .onSubscriptionChange(() => {});',
+  ].join('\n'));
+  saveManifest(root, manifest(['order', 'refund', 'subscription', 'subscriptionChange']));
   const result = runVerify(root, '--gate', 'report');
   assert.strictEqual(result.status, 0, result.stderr);
 });
@@ -296,6 +338,68 @@ test('Python handlers are detected and # comment fakes are rejected', () => {
   assert.match(badResult.stdout, /onSubscriptionPeriodChanged/);
 });
 
+test('Ruby and PHP backtick command strings do not count as handler registrations', () => {
+  for (const extension of ['rb', 'php']) {
+    const root = fixture();
+    write(root, 'src/integration.js', [
+      'client.subscription().create({});',
+      'client.webhook().onPayment(() => {}).onSubscriptionStatus(() => {});',
+    ].join('\n'));
+    write(root, `script.${extension}`, 'fake = `printf .on_subscription_period_changed(`;');
+    saveManifest(root, advisoryManifest(['subscription']));
+    const result = runVerify(root);
+    assert.strictEqual(result.status, 1, `${extension} backtick content must not pass\n${result.stdout}`);
+    assert.match(result.stdout, /onSubscriptionPeriodChanged/);
+  }
+});
+
+test('formal report requires concrete business identifiers for passing tests', () => {
+  const missingRoot = fixture();
+  write(missingRoot, 'src/integration.js', 'waffo.order().create({});\nwaffo.webhook().onPayment(() => {});\n');
+  const missingData = manifest(['order']);
+  delete missingData.tests.find((item) => item.id === 'order-create').identifiers;
+  saveManifest(missingRoot, missingData);
+  const missingResult = runVerify(missingRoot, '--gate', 'report');
+  assert.strictEqual(missingResult.status, 2);
+  assert.match(missingResult.stderr, /Test "order-create" must include an identifiers object/);
+
+  const placeholderRoot = fixture();
+  write(placeholderRoot, 'src/integration.js', 'waffo.order().create({});\nwaffo.webhook().onPayment(() => {});\n');
+  const placeholderData = manifest(['order']);
+  placeholderData.tests.find((item) => item.id === 'payment-success').identifiers.acquiringOrderId = '{acquiringOrderId}';
+  saveManifest(placeholderRoot, placeholderData);
+  const placeholderResult = runVerify(placeholderRoot, '--gate', 'report');
+  assert.strictEqual(placeholderResult.status, 2);
+  assert.match(placeholderResult.stderr, /identifiers\.acquiringOrderId must be a concrete string/);
+});
+
+test('subscription period-change evidence requires subscriptionRequest and subscriptionId', () => {
+  const root = fixture();
+  write(root, 'src/integration.js', [
+    'waffo.subscription().create({});',
+    'waffo.webhook().onPayment(() => {}).onSubscriptionStatus(() => {}).onSubscriptionPeriodChanged(() => {});',
+  ].join('\n'));
+  const data = manifest(['subscription']);
+  const periodChanged = data.tests.find((item) => item.id === 'subscription-event-period-changed');
+  delete periodChanged.identifiers.subscriptionId;
+  periodChanged.identifiers.acquiringOrderId = IDENTIFIER_VALUES.acquiringOrderId;
+  saveManifest(root, data);
+  const result = runVerify(root, '--gate', 'report');
+  assert.strictEqual(result.status, 2);
+  assert.match(result.stderr, /Test "subscription-event-period-changed" identifiers\.subscriptionId/);
+});
+
+test('passing pay-method coverage requires paymentRequestId and acquiringOrderId', () => {
+  const root = fixture();
+  write(root, 'src/integration.js', 'waffo.order().create({});\nwaffo.webhook().onPayment(() => {});\n');
+  const data = manifest(['order']);
+  delete data.payMethodCoverage[0].identifiers.acquiringOrderId;
+  saveManifest(root, data);
+  const result = runVerify(root, '--gate', 'report');
+  assert.strictEqual(result.status, 2);
+  assert.match(result.stderr, /Pay method "CARD" identifiers\.acquiringOrderId/);
+});
+
 test('required test ids match acceptance-criteria vocabulary', () => {
   const orderIds = contract.deriveRequiredTestIds(['order']);
   assert.ok(orderIds.includes('order-create'), 'order should require order-create');
@@ -303,6 +407,10 @@ test('required test ids match acceptance-criteria vocabulary', () => {
   assert.ok(!orderIds.includes('payment-create'), 'must not require the old payment-create id');
   assert.ok(!orderIds.includes('payment-webhook'), 'must not require the old payment-webhook id');
   assert.ok(contract.deriveRequiredTestIds(['subscription']).includes('subscription-renewal'), 'subscription should require subscription-renewal');
+  const everyTestId = contract.deriveRequiredTestIds(['order', 'refund', 'subscription', 'subscriptionChange']);
+  for (const id of everyTestId) {
+    assert.ok(contract.TEST_IDENTIFIER_REQUIREMENTS[id]?.length, `${id} must declare required business identifiers`);
+  }
 });
 
 let failures = 0;

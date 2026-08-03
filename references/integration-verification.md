@@ -205,10 +205,10 @@ sleep 3 && curl -s http://localhost:$PORT/api/status
 
 **State tracking across retries:**
 Maintain a `test_state` dict across test cases:
-- `order-create` → saves `{orderID, checkoutURL, acquiringOrderID}`
+- `order-create` → 保存 `{orderID, checkoutURL, acquiringOrderId}`
 - `payment-success` → saves `{paidOrderID, quotaBefore, quotaAfter}`
 - `refund-success` → saves `{refundRequestID}`
-- `subscription-create` → saves `{subscriptionRequest, subscriptionID}`
+- `subscription-create` → 保存 `{subscriptionRequest, subscriptionId}`
 
 When re-running after fix, check if dependent state needs refresh (e.g., if order-create was fixed, payment-success needs a new order).
 
@@ -572,7 +572,7 @@ After all test items are executed, evaluate:
 | C4 | Redirect URLs verified | Were success/failure redirect URLs asserted from checkout result page? |
 | C5 | Webhook Content-Type | Webhook response sets `Content-Type: application/json`? SDK only generates responseBody — the web framework default is usually `text/plain`. Check the actual response header during active tests (e.g., inspect webhook call logs or curl the endpoint). If wrong → `FIXABLE_CODE`, apply Loop Mode fix. |
 | C6 | Parameter quality | During active tests, inspect API request parameters: (1) `orderDescription` is specific, not "test" placeholder; (2) `goodsName` is present; (3) at least one of `goodsUrl` or `appName` is present unless explicit premium merchant exemption exists; default is non-premium/no exemption; (4) if the merchant has no App, `goodsUrl` is required and `appName` should not be invented; (5) `goodsUrl` is a product detail page or official website URL, not an image URL; (6) `appName` is only for App merchants and must be the App Store / Google Play listed app name, not a package ID or placeholder; (7) `userEmail` format valid, no "test" in address; (8) `userTerminal` matches actual terminal type (WEB/APP). If a required quality check fails → `FIXABLE_CODE`; if exemption is claimed, record the explicit confirmation evidence in the report. |
-| C7 | Data persistence | After payment-success: verify `acquiringOrderID` stored in project database. After refund-success (if applicable): verify `refundRequestId` returned to caller and persisted. These IDs are required for webhook matching and inquiry operations. |
+| C7 | 数据持久化 | `payment-success` 后确认项目数据库已保存 `acquiringOrderId`；适用 `refund-success` 时，确认 `refundRequestId` 已返回调用方并持久化。这些 ID 用于匹配 webhook 和执行 inquiry。 |
 | C8 | orderExpiredAt format | Only if project sets custom checkout expiry: verify `orderExpiredAt` is ISO 8601 UTC+0 format ending with `Z`, and value is in the future. Skip if default expiry (4h). |
 | C9 | Webhook delivery evidence transparency | Record `PROJECT_SIDE_VERIFIED`, `WAFFO_SIDE_VERIFIED`, or `WAFFO_SIDE_UNVERIFIED`. If only proxy replay, local logs, or project-side state are available, use `PROJECT_SIDE_VERIFIED` or `WAFFO_SIDE_UNVERIFIED` — never present that as Waffo-side verified. |
 

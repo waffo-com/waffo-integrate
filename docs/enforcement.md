@@ -51,7 +51,15 @@ T2/T3 负责可机械验证的事实：feature 范围、必需 handler 注册、
     "D": { "status": "PASS", "evidenceIds": ["ev-quality"] }
   },
   "tests": [
-    { "id": "payment-create", "status": "PASS", "evidenceIds": ["ev-payment-create"] }
+    {
+      "id": "order-create",
+      "status": "PASS",
+      "identifiers": {
+        "paymentRequestId": "payreq-20260803-0001",
+        "acquiringOrderId": "acq-20260803-0001"
+      },
+      "evidenceIds": ["ev-phase-a-log"]
+    }
   ],
   "payMethodInquiry": {
     "status": "PASS",
@@ -59,7 +67,15 @@ T2/T3 负责可机械验证的事实：feature 范围、必需 handler 注册、
     "activeMethods": [{ "id": "CARD" }]
   },
   "payMethodCoverage": [
-    { "methodId": "CARD", "status": "PASS", "evidenceIds": ["ev-card"] }
+    {
+      "methodId": "CARD",
+      "status": "PASS",
+      "identifiers": {
+        "paymentRequestId": "payreq-20260803-0001",
+        "acquiringOrderId": "acq-20260803-0001"
+      },
+      "evidenceIds": ["ev-card"]
+    }
   ],
   "qualityFindings": [
     { "id": "webhookSignatureVerification", "riskLevel": "PASS", "evidenceIds": ["ev-quality"] }
@@ -127,6 +143,21 @@ Claude hook 会把当前 Claude transcript 传给 validator。validator 必须�
   - `refund`：`refund-success`、`refund-inquiry`、`refund-webhook`
   - `subscription`：`subscription-create`、`subscription-inquiry`、`subscription-renewal`、`subscription-cancel`、`subscription-event-status`、`subscription-event-period-changed`、`subscription-event-payment`
   - `subscriptionChange`：`subscription-change`、`subscription-change-inquiry`、`subscription-event-change`
+
+  `PASS`/`USED` 测试还必须通过 `identifiers` 记录本轮真实业务对象。字段名严格使用 API contract 的 camelCase；`-`、`N/A`、`unknown`、`xxx`、`{subscriptionId}` 等占位值不能通过：
+
+  | 测试 ID | 必需 `identifiers` | 有值时追加 |
+  |---|---|---|
+  | `order-create`、`payment-success`、`payment-failure`、`webhook-idempotency` | `paymentRequestId`、`acquiringOrderId` | - |
+  | `order-create-error` | `paymentRequestId` | `acquiringOrderId` |
+  | `refund-success` | `paymentRequestId`、`acquiringOrderId`、`refundRequestId` | - |
+  | `refund-inquiry`、`refund-webhook` | `acquiringOrderId`、`refundRequestId` | `paymentRequestId` |
+  | `subscription-create`、`subscription-renewal` | `subscriptionRequest`、`subscriptionId` | `paymentRequestId`、`acquiringOrderId` |
+  | `subscription-inquiry`、`subscription-cancel`、`subscription-event-status`、`subscription-event-period-changed` | `subscriptionRequest`、`subscriptionId` | - |
+  | `subscription-event-payment` | `subscriptionRequest`、`subscriptionId` | `paymentRequestId`、`acquiringOrderId` |
+  | `subscription-change`、`subscription-change-inquiry`、`subscription-event-change` | `originSubscriptionRequest`、新的 `subscriptionRequest`、`subscriptionId` | - |
+
+  `payMethodCoverage` 中状态为 `PASS`/`USED` 的每个支付方式也必须记录 `paymentRequestId` 和 `acquiringOrderId`。人工、支持或跳过状态可能尚未产生业务 ID，因此仍按 `evidenceIds`、`reason`、`nextStep` 规则校验，不强制 `identifiers`。
 
   `FAIL`/`PARTIAL` 阻断报告；`MANUAL`、`WAFFO_SUPPORT_REQUIRED`、`SKIP_WITH_REASON`、`N/A` 必须有当前轮证据、原因和下一步，并把结果限制为 `CONDITIONAL`。
 - `payMethodInquiry.status` 必须为 `PASS`；每个 `activeMethods` 条目必须出现在 `payMethodCoverage`。

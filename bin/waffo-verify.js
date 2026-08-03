@@ -94,6 +94,31 @@ const FEATURE_REQUIRED_TESTS = {
   subscriptionChange: ['subscription-change', 'subscription-change-inquiry', 'subscription-event-change'],
 };
 
+// A PASS/USED test is only traceable when it names the Waffo objects exercised by that
+// scenario. Field names follow references/api-contract.md; optional IDs are documented in
+// docs/enforcement.md but are not required when Waffo does not return them for that event.
+const TEST_IDENTIFIER_REQUIREMENTS = {
+  'order-create': ['paymentRequestId', 'acquiringOrderId'],
+  'order-create-error': ['paymentRequestId'],
+  'payment-success': ['paymentRequestId', 'acquiringOrderId'],
+  'payment-failure': ['paymentRequestId', 'acquiringOrderId'],
+  'webhook-idempotency': ['paymentRequestId', 'acquiringOrderId'],
+  'refund-success': ['paymentRequestId', 'acquiringOrderId', 'refundRequestId'],
+  'refund-inquiry': ['acquiringOrderId', 'refundRequestId'],
+  'refund-webhook': ['acquiringOrderId', 'refundRequestId'],
+  'subscription-create': ['subscriptionRequest', 'subscriptionId'],
+  'subscription-inquiry': ['subscriptionRequest', 'subscriptionId'],
+  'subscription-renewal': ['subscriptionRequest', 'subscriptionId'],
+  'subscription-cancel': ['subscriptionRequest', 'subscriptionId'],
+  'subscription-event-status': ['subscriptionRequest', 'subscriptionId'],
+  'subscription-event-period-changed': ['subscriptionRequest', 'subscriptionId'],
+  'subscription-event-payment': ['subscriptionRequest', 'subscriptionId'],
+  'subscription-change': ['originSubscriptionRequest', 'subscriptionRequest', 'subscriptionId'],
+  'subscription-change-inquiry': ['originSubscriptionRequest', 'subscriptionRequest', 'subscriptionId'],
+  'subscription-event-change': ['originSubscriptionRequest', 'subscriptionRequest', 'subscriptionId'],
+};
+const PAY_METHOD_REQUIRED_IDENTIFIERS = ['paymentRequestId', 'acquiringOrderId'];
+
 const REQUIRED_QUALITY_CHECKS = [
   'webhookSignatureVerification',
   'idempotencyAndLocking',
@@ -146,8 +171,8 @@ function collectSourceFiles(root) {
 function commentSyntax(file) {
   const ext = path.extname(file).toLowerCase();
   if (ext === '.py') return { slash: false, block: false, hash: true, backtick: false, triple: true };
-  if (ext === '.rb') return { slash: false, block: false, hash: true, backtick: false, triple: false };
-  if (ext === '.php') return { slash: true, block: true, hash: true, backtick: false, triple: false };
+  if (ext === '.rb') return { slash: false, block: false, hash: true, backtick: true, triple: false };
+  if (ext === '.php') return { slash: true, block: true, hash: true, backtick: true, triple: false };
   // C-like family: JS/TS/JSX/TSX/MJS/CJS/Java/Go/Kotlin/C#. `#` is NOT a comment here
   // (JS private fields, C# preprocessor), and backtick is a string (Go raw strings).
   return { slash: true, block: true, hash: false, backtick: true, triple: false };
@@ -302,6 +327,13 @@ function inferFeaturesFromCode(corpus) {
 
 function normalizeText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function isConcreteIdentifier(value) {
+  if (typeof value !== 'string') return false;
+  const normalized = value.trim();
+  if (!normalized) return false;
+  return !/^(?:-|n\/?a|none|null|unknown|todo|tbd|x+|\{[^}]*\}|<[^>]*>)$/i.test(normalized);
 }
 
 function transcriptUserMessages(transcriptPath) {
@@ -528,6 +560,19 @@ function reportGateBlocked(result, manifest) {
     }
   };
 
+  const requireIdentifiers = (item, label, requiredFields) => {
+    const identifiers = item && item.identifiers;
+    if (!identifiers || typeof identifiers !== 'object' || Array.isArray(identifiers)) {
+      reasons.push(`${label} must include an identifiers object with concrete ${requiredFields.join(', ')}.`);
+      return;
+    }
+    for (const field of requiredFields) {
+      if (!isConcreteIdentifier(identifiers[field])) {
+        reasons.push(`${label} identifiers.${field} must be a concrete string, not a placeholder.`);
+      }
+    }
+  };
+
   const phases = data.phases && typeof data.phases === 'object' && !Array.isArray(data.phases) ? data.phases : {};
   if (!data.phases || Array.isArray(data.phases) || typeof data.phases !== 'object') reasons.push('Manifest phases must be an object.');
   for (const phase of REQUIRED_PHASES) {
@@ -574,6 +619,8 @@ function reportGateBlocked(result, manifest) {
     if (!test || !normalizeText(test.id)) continue;
     if (['PASS', 'USED'].includes(test.status)) {
       requireCurrentEvidence(test, `Test "${test.id}"`);
+      const requiredIdentifiers = TEST_IDENTIFIER_REQUIREMENTS[test.id] || [];
+      if (requiredIdentifiers.length) requireIdentifiers(test, `Test "${test.id}"`, requiredIdentifiers);
     } else if (conditionalStatuses.has(test.status)) {
       requireCurrentEvidence(test, `Test "${test.id}"`);
       if (!normalizeText(test.reason)) reasons.push(`Test "${test.id}" with status ${test.status} must include a reason.`);
@@ -606,8 +653,10 @@ function reportGateBlocked(result, manifest) {
     }
     if (coverageById.has(id)) reasons.push(`Pay method coverage "${id}" is duplicated.`);
     else coverageById.set(id, row);
-    if (['PASS', 'USED'].includes(row.status)) requireCurrentEvidence(row, `Pay method "${id}"`);
-    else if (conditionalStatuses.has(row.status)) {
+    if (['PASS', 'USED'].includes(row.status)) {
+      requireCurrentEvidence(row, `Pay method "${id}"`);
+      requireIdentifiers(row, `Pay method "${id}"`, PAY_METHOD_REQUIRED_IDENTIFIERS);
+    } else if (conditionalStatuses.has(row.status)) {
       requireCurrentEvidence(row, `Pay method "${id}"`);
       if (!normalizeText(row.reason)) reasons.push(`Pay method "${id}" with status ${row.status} must include a reason.`);
       if (!normalizeText(row.nextStep)) reasons.push(`Pay method "${id}" with status ${row.status} must include a nextStep.`);
@@ -741,6 +790,8 @@ module.exports = {
   FEATURE_REQUIRED_DECISIONS,
   FEATURE_REQUIRED_HANDLERS,
   FEATURE_REQUIRED_TESTS,
+  TEST_IDENTIFIER_REQUIREMENTS,
+  PAY_METHOD_REQUIRED_IDENTIFIERS,
   REQUIRED_PHASES,
   REQUIRED_QUALITY_CHECKS,
   deriveRequiredDecisionIds,

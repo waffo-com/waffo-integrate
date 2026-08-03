@@ -319,7 +319,7 @@ Output a Waffo-team-facing Markdown report only when the final outcome is `FULL`
 | Config endpoints | {project HTTP endpoints or N/A} |
 | Webhook endpoint | {project HTTP endpoint, auth, signature behavior} |
 | Webhook business logic | {fulfillment/revoke/activation/idempotency behavior} |
-| Persistence | {where request IDs, acquiringOrderID, refundRequestId, subscriptionID are stored} |
+| 持久化 | {request ID、acquiringOrderId、refundRequestId、subscriptionId 的存储位置} |
 | Credentials | {Sandbox source, sanitized} |
 | APP terminal | {N/A or APP assessment summary} |
 
@@ -345,16 +345,21 @@ Output a Waffo-team-facing Markdown report only when the final outcome is `FULL`
 
 | Test Item | Result | Request ID | Acquiring ID (A单) | Subscription Request | Subscription ID | Refund Request ID | Change Request / Key | Details |
 |-----------|--------|------------|--------------------|----------------------|-----------------|-------------------|----------------------|---------|
-| order-create | PASS | {paymentRequestId} | {acquiringOrderID} | - | - | - | - | checkout URL returned |
-| payment-success ({method}) | PASS | {paymentRequestId} | {acquiringOrderID} | - | - | - | - | payment, webhook, and business logic verified |
-| payment-failure ({method}) | PASS | {paymentRequestId} | {acquiringOrderID} | - | - | - | - | failure state and no-fulfillment verified |
-| order-create-error | PASS | {paymentRequestId} | {acquiringOrderID or -} | - | - | - | - | user-friendly error and local failure state verified |
-| pay-method: {method} | PASS / SKIP / MANUAL / WAFFO_SUPPORT_REQUIRED | {paymentRequestId or -} | {acquiringOrderID or -} | - | - | - | - | {reason and evidence} |
-| refund-success | PASS | {paymentRequestId} | {acquiringOrderID} | - | - | {refundRequestId} | - | refund and state verified |
-| subscription-create | PASS | {paymentRequestId if present} | {acquiringOrderID if present} | {subscriptionRequest} | {subscriptionId} | - | - | activation verified |
-| subscription-renewal | PASS | {paymentRequestId if present} | {acquiringOrderID if present} | {subscriptionRequest} | {subscriptionId} | - | - | renewal webhook/state verified |
-| subscription-change | PASS / N/A | - | - | {origin/new subscriptionRequest} | {subscriptionId} | - | {change key} | required only if upgrade/downgrade integrated |
-| ... | ... | ... | ... | ... | ... | ... | ... | ... |
+| order-create | PASS | {paymentRequestId} | {acquiringOrderId} | - | - | - | - | 已返回 checkout URL |
+| payment-success ({method}) | PASS | {paymentRequestId} | {acquiringOrderId} | - | - | - | - | 已验证支付、webhook 和业务逻辑 |
+| payment-failure ({method}) | PASS | {paymentRequestId} | {acquiringOrderId} | - | - | - | - | 已验证失败状态且未履约 |
+| order-create-error | PASS | {paymentRequestId} | {acquiringOrderId 或 -} | - | - | - | - | 已验证友好错误和本地失败状态 |
+| webhook-idempotency | PASS | {paymentRequestId} | {acquiringOrderId} | - | - | - | - | 已验证同一通知不会重复执行业务逻辑 |
+| pay-method: {method} | PASS / SKIP / MANUAL / WAFFO_SUPPORT_REQUIRED | {paymentRequestId 或 -} | {acquiringOrderId 或 -} | - | - | - | - | {原因和证据} |
+| refund-success | PASS | {paymentRequestId} | {acquiringOrderId} | - | - | {refundRequestId} | - | 已验证退款和状态 |
+| refund-inquiry | PASS | {paymentRequestId 如有} | {acquiringOrderId} | - | - | {refundRequestId} | - | 已验证 inquiry 状态与退款结果一致 |
+| refund-webhook | PASS | {paymentRequestId 如有} | {acquiringOrderId} | - | - | {refundRequestId} | - | 已验证退款通知和本地状态更新 |
+| subscription-create | PASS | {paymentRequestId 如有} | {acquiringOrderId 如有} | {subscriptionRequest} | {subscriptionId} | - | - | 已验证激活 |
+| subscription-inquiry | PASS | - | - | {subscriptionRequest} | {subscriptionId} | - | - | 已验证 inquiry 状态 |
+| subscription-renewal | PASS | {paymentRequestId 如有} | {acquiringOrderId 如有} | {subscriptionRequest} | {subscriptionId} | - | - | 已验证续期通知和状态 |
+| subscription-cancel | PASS | - | - | {subscriptionRequest} | {subscriptionId} | - | - | 已验证取消和本地状态更新 |
+| subscription-change | PASS / N/A | - | - | {subscriptionRequest} | {subscriptionId} | - | {originSubscriptionRequest} | 仅集成升降级时要求 |
+| subscription-change-inquiry | PASS / N/A | - | - | {subscriptionRequest} | {subscriptionId} | - | {originSubscriptionRequest} | 已验证 inquiry 状态与 change 结果一致 |
 
 ## Subscription Event Coverage
 
@@ -362,8 +367,8 @@ Output a Waffo-team-facing Markdown report only when the final outcome is `FULL`
 |-----------------|------------|---------------|--------|------------|--------------------|----------------------|-----------------|----------------------|--------------------|
 | subscription-event-status | SUBSCRIPTION_STATUS_NOTIFICATION | Subscription integrated | PASS / FAIL / WAFFO_SUPPORT_REQUIRED | - | - | {subscriptionRequest} | {subscriptionId} | - | activation/cancel/status evidence |
 | subscription-event-period-changed | SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION | Subscription integrated | PASS / FAIL / WAFFO_SUPPORT_REQUIRED | - | - | {subscriptionRequest} | {subscriptionId} | - | renewal period evidence |
-| subscription-event-payment | PAYMENT_NOTIFICATION | Subscription integrated | PASS / FAIL / WAFFO_SUPPORT_REQUIRED | {paymentRequestId if present} | {acquiringOrderID if present} | {subscriptionRequest} | {subscriptionId} | - | first payment or renewal payment notification evidence |
-| subscription-event-change | SUBSCRIPTION_CHANGE_NOTIFICATION | Upgrade/downgrade integrated | PASS / N/A / FAIL / WAFFO_SUPPORT_REQUIRED | - | - | {subscriptionRequest} | {subscriptionId} | {change key} | change result evidence |
+| subscription-event-payment | PAYMENT_NOTIFICATION | Subscription integrated | PASS / FAIL / WAFFO_SUPPORT_REQUIRED | {paymentRequestId 如有} | {acquiringOrderId 如有} | {subscriptionRequest} | {subscriptionId} | - | 首次支付或续期支付通知证据 |
+| subscription-event-change | SUBSCRIPTION_CHANGE_NOTIFICATION | Upgrade/downgrade integrated | PASS / N/A / FAIL / WAFFO_SUPPORT_REQUIRED | - | - | {subscriptionRequest} | {subscriptionId} | {originSubscriptionRequest} | change result evidence |
 
 ## Parameter Check
 
@@ -381,7 +386,7 @@ Output a Waffo-team-facing Markdown report only when the final outcome is `FULL`
 ## Data Integrity Check
 
 - [x] Idempotency key persisted before API call
-- [x] `acquiringOrderID` stored
+- [x] 已存储 `acquiringOrderId`
 - [x] `refundRequestId` returned and persisted
 - [x] `subscriptionRequest` / `subscriptionId` stored when applicable
 - [x] Redirect URLs: success, failed, cancel
@@ -410,7 +415,7 @@ Output a Waffo-team-facing Markdown report only when the final outcome is `FULL`
 
 | Method | Country / Currency | Type | Status | Order ID | Reason / Next Step |
 |--------|--------------------|------|--------|----------|--------------------|
-| {method} | {country/currency} | {type} | TESTED | {acquiringOrderID} | {role in minimum set} |
+| {method} | {country/currency} | {type} | TESTED | {acquiringOrderId} | {role in minimum set} |
 | {method} | {country/currency} | {type} | SKIPPED | - | {skip reason} |
 | {method} | {country/currency} | DEVICE_PAY | MANUAL | - | requires real device; test link/QR provided |
 | {method} | {country/currency} | {type} | WAFFO_SUPPORT_REQUIRED | {ID or -} | {support package summary} |

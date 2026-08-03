@@ -16,9 +16,10 @@
 - handler 扫描改为识别移除注释和字符串后的实际 SDK 注册调用，并覆盖 Node、Java、Go、Python 命名；注释伪造不再通过，合法 Go handler 不再误报。
 - Claude Code hook 改为从 stdin 读取官方 hook JSON，覆盖 `Write|Edit`，并使用 `transcript_path` 核对人工 decision quote 是否真实来自用户消息。
 - request ID 检查新增 `randomUUID()`、`UUID.randomUUID()`、`uuid.uuid4()` 和 Go UUID 的原始 36 字符写法。
-- 修复 validator 的注释 tokenizer 按语言区分：`#` 只在 Python/Ruby/PHP 视为注释，不再误伤 JS/TS 私有字段（`this.#x`）而漏报同一行的 handler 注册；`//`、`/* */` 不再在 Python/Ruby 中被误当注释。
-- report gate 的必需 test ID 对齐 `references/acceptance-criteria.md` §3 词汇（`order-create`、`order-create-error`、`subscription-renewal` 等），取代之前未文档化且与 skill 其余部分冲突的 `payment-create`/`payment-inquiry`/`payment-webhook`；完整清单列入 `docs/enforcement.md`，pay-method 覆盖仍由 `payMethodInquiry`/`payMethodCoverage` 单独校验。
-- `tests/waffo-verify.test.js` 增补回归：JS 私有字段不再隐藏 handler、Python handler 检测与 `#` 注释伪造、test-ID 词汇一致（共 19 项）。
+- 修复 validator 的注释 tokenizer 按语言区分：`#` 只在 Python/Ruby/PHP 视为注释，不再误伤 JS/TS 私有字段（`this.#x`）而漏报同一行的 handler 注册；`//`、`/* */` 不再在 Python/Ruby 中被误当注释；Ruby/PHP 反引号命令字符串也不会伪造 handler 注册。
+- report gate 的必需 test ID 对齐 `references/acceptance-criteria.md` §3 词汇（`order-create`、`order-create-error`、`subscription-renewal` 等），取代之前未文档化且与 skill 其余部分冲突的 `payment-create`/`payment-inquiry`/`payment-webhook`；完整清单和示例列入 `docs/enforcement.md`，pay-method 覆盖仍由 `payMethodInquiry`/`payMethodCoverage` 单独校验。
+- report gate 要求每个 `PASS`/`USED` test 按场景提交具体业务 `identifiers`；例如 `subscription-event-period-changed` 必须包含 `subscriptionRequest` 和 `subscriptionId`，仅有 `acquiringOrderId` 不能通过。支付方式覆盖的成功结果必须包含 `paymentRequestId` 和 `acquiringOrderId`，占位值会被拒绝。
+- `tests/waffo-verify.test.js` 增补回归：JS 私有字段、Python/Ruby/PHP tokenizer、test-ID 词汇、业务 ID、全 feature 报告和支付方式证据校验（共 24 项）。
 
 ### Changed
 

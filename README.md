@@ -78,7 +78,7 @@ Built-in protocol and contract rules prevent common integration mistakes:
 
 Phased Step 7 execution with automatic fix-and-retry:
 
-- **Phase A** — Core tests: order-create, payment-success/failure, webhook-idempotency
+- **Phase A** — 核心测试：`order-create`、`order-create-error`、`payment-success`、`payment-failure`、`webhook-idempotency`
 - **Phase B1/B2** — Pay method coverage: card + non-card (minimum test set from API discovery)
 - **Phase C1** — Refund tests
 - **Phase C2** — Subscription lifecycle tests
