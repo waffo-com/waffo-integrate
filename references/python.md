@@ -101,11 +101,16 @@ class PaymentCreateInput:
         description: str,
         notify_url: str,
         success_redirect_url: str,
+        failed_redirect_url: str,
+        cancel_redirect_url: str,
         user_id: str,
         user_email: str,
+        goods_name: str,
+        goods_url: str,
         user_terminal: str = "WEB",  # WEB | APP
         pay_method_type: str | None = None,
         pay_method_name: str | None = None,
+        goods_id: str | None = None,
     ) -> None:
         self.merchant_order_id = merchant_order_id
         self.amount = amount
@@ -113,11 +118,16 @@ class PaymentCreateInput:
         self.description = description
         self.notify_url = notify_url
         self.success_redirect_url = success_redirect_url
+        self.failed_redirect_url = failed_redirect_url
+        self.cancel_redirect_url = cancel_redirect_url
         self.user_id = user_id
         self.user_email = user_email
         self.user_terminal = user_terminal
         self.pay_method_type = pay_method_type
         self.pay_method_name = pay_method_name
+        self.goods_id = goods_id
+        self.goods_name = goods_name
+        self.goods_url = goods_url
 
 
 def create_payment(input: PaymentCreateInput) -> dict[str, Any]:
@@ -140,10 +150,17 @@ def create_payment(input: PaymentCreateInput) -> dict[str, Any]:
                 "orderDescription": input.description,
                 "notifyUrl": input.notify_url,
                 "successRedirectUrl": input.success_redirect_url,
+                "failedRedirectUrl": input.failed_redirect_url,
+                "cancelRedirectUrl": input.cancel_redirect_url,
                 "userInfo": {
                     "userId": input.user_id,
                     "userEmail": input.user_email,
                     "userTerminal": input.user_terminal,
+                },
+                "goodsInfo": {
+                    "goodsId": input.goods_id,
+                    "goodsName": input.goods_name,  # Rule 21: goodsName always required
+                    "goodsUrl": input.goods_url,  # or appName for App-only merchants
                 },
                 "paymentInfo": payment_info,
             }
@@ -219,7 +236,11 @@ def capture_order(payment_request_id: str, capture_amount: str) -> dict[str, Any
             f"Order capture failed: {response.get_code()} - {response.get_message()}"
         )
 
-    return response.get_data() or {}
+    data = response.get_data()
+    return {
+        "acquiringOrderId": data.acquiring_order_id if data else None,
+        "orderStatus": data.order_status if data else None,
+    }
 ```
 
 ---
@@ -333,6 +354,9 @@ class SubscriptionCreateInput:
         period_type: str = "MONTHLY",  # DAILY | WEEKLY | MONTHLY (NO YEARLY)
         period_interval: str = "1",  # string, not int
         goods_url: str,
+        failed_redirect_url: str,
+        cancel_redirect_url: str,
+        subscription_management_url: str,  # Rule 26: required; the page must require login
     ) -> None:
         self.merchant_subscription_id = merchant_subscription_id
         self.amount = amount
@@ -348,6 +372,9 @@ class SubscriptionCreateInput:
         self.period_type = period_type
         self.period_interval = period_interval
         self.goods_url = goods_url
+        self.failed_redirect_url = failed_redirect_url
+        self.cancel_redirect_url = cancel_redirect_url
+        self.subscription_management_url = subscription_management_url
 
 
 def create_subscription(input: SubscriptionCreateInput) -> dict[str, Any]:
@@ -361,11 +388,13 @@ def create_subscription(input: SubscriptionCreateInput) -> dict[str, Any]:
                 "merchantSubscriptionId": input.merchant_subscription_id,
                 "currency": input.currency,  # NOT orderCurrency (orders use orderCurrency)
                 "amount": input.amount,      # NOT orderAmount
-                "orderDescription": input.description,
                 "notifyUrl": input.notify_url,
                 "successRedirectUrl": input.success_redirect_url,
+                "failedRedirectUrl": input.failed_redirect_url,
+                "cancelRedirectUrl": input.cancel_redirect_url,
+                "subscriptionManagementUrl": input.subscription_management_url,
                 "productInfo": {
-                    "description": input.product_name,
+                    "description": input.description,
                     "periodType": input.period_type,
                     "periodInterval": input.period_interval,
                 },
@@ -422,12 +451,21 @@ def query_subscription(subscription_request: str) -> dict[str, Any]:
     }
 
 
-def cancel_subscription(subscription_request: str) -> dict[str, Any]:
+def cancel_subscription(subscription_id: str) -> dict[str, Any]:
     waffo = get_waffo()
     try:
-        response = waffo.subscription().cancel({"subscriptionRequest": subscription_request})
-    except WaffoUnknownStatusError:
-        return query_subscription(subscription_request)
+        # Cancel is keyed by the Waffo subscriptionId (from the create response), NOT subscriptionRequest.
+        response = waffo.subscription().cancel({"subscriptionId": subscription_id})
+    except WaffoUnknownStatusError as error:
+        # Unknown status — reconcile with an inquiry keyed by the SAME subscriptionId.
+        inquiry_response = waffo.subscription().inquiry({"subscriptionId": subscription_id})
+        if not inquiry_response.is_success():
+            raise RuntimeError(
+                "Subscription cancel inquiry failed: "
+                f"{inquiry_response.get_code()} - {inquiry_response.get_message()}"
+            ) from error
+        recovered = inquiry_response.get_data()
+        return {"subscriptionStatus": recovered.subscription_status if recovered else None}
 
     if not response.is_success():
         raise RuntimeError(
@@ -435,7 +473,9 @@ def cancel_subscription(subscription_request: str) -> dict[str, Any]:
         )
 
     data = response.get_data()
-    return {"subscriptionStatus": data.subscription_status if data else None}
+    # The cancel response exposes order_status, while inquiry exposes subscription_status.
+    # Normalize both SDK response shapes to one stable service-layer field.
+    return {"subscriptionStatus": data.order_status if data else None}
 
 
 def manage_subscription(subscription_request: str) -> str | None:
@@ -846,12 +886,19 @@ def test_create_payment_order(waffo: Waffo) -> None:
             "merchantOrderId": f"test-{int(time())}",
             "orderCurrency": "USD",
             "orderAmount": "1.00",
-            "orderDescription": "Integration test order",
+            "orderDescription": "Demo order - SDK connectivity check",
             "notifyUrl": "https://example.com/webhook",
+            "successRedirectUrl": "https://example.com/success",
+            "failedRedirectUrl": "https://example.com/failed",
+            "cancelRedirectUrl": "https://example.com/cancel",
             "userInfo": {
-                "userId": "test-user",
-                "userEmail": "test-user@example.com",
+                "userId": "demo-user-001",
+                "userEmail": "demo-user-001@example.com",
                 "userTerminal": "WEB",
+            },
+            "goodsInfo": {
+                "goodsName": "Demo Goods",
+                "goodsUrl": "https://www.example.com/products/demo",
             },
             "paymentInfo": {"productName": "ONE_TIME_PAYMENT"},
         }
@@ -876,12 +923,19 @@ def test_inquiry_order(waffo: Waffo) -> None:
             "merchantOrderId": f"test-{int(time())}",
             "orderCurrency": "USD",
             "orderAmount": "1.00",
-            "orderDescription": "Test",
+            "orderDescription": "Demo order - inquiry flow",
             "notifyUrl": "https://example.com/webhook",
+            "successRedirectUrl": "https://example.com/success",
+            "failedRedirectUrl": "https://example.com/failed",
+            "cancelRedirectUrl": "https://example.com/cancel",
             "userInfo": {
-                "userId": "test-user",
-                "userEmail": "test-user@example.com",
+                "userId": "demo-user-001",
+                "userEmail": "demo-user-001@example.com",
                 "userTerminal": "WEB",
+            },
+            "goodsInfo": {
+                "goodsName": "Demo Goods",
+                "goodsUrl": "https://www.example.com/products/demo",
             },
             "paymentInfo": {"productName": "ONE_TIME_PAYMENT"},
         }

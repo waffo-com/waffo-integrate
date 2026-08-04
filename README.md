@@ -50,15 +50,14 @@ Copy `SKILL.md`, `references/`, `docs/`, and `bin/waffo-verify.js` into the same
 
 ## What it does
 
-A guided integration flow with Step 7 verification:
+A guided integration flow with Step 6 verification:
 
-1. **Detects language** — Node.js / Java / Go / Python (auto-detect or ask)
-2. **Checks project status** — existing project or new scaffold
-3. **Selects features** — payments, refunds, subscriptions (webhook auto-derived)
-4. **Picks framework** — Express, Spring Boot, Gin, FastAPI, etc.
-5. **Previews code** — shows complete integration code for review
-6. **Writes to project** — installs SDK dependency + generates files
-7. **Verifies integration** — phased end-to-end testing with Markdown acceptance report
+1. **Detects language and project status** — Node.js / Java / Go / Python; existing project or new scaffold
+2. **Selects features and context** — payments, refunds, subscriptions, currency, and checkout decisions
+3. **Selects framework and events** — Express, Spring Boot, Gin, FastAPI, plus derived webhook handlers
+4. **Presents code for review** — shows complete integration code before writing
+5. **Writes and builds** — installs the SDK dependency, generates files, and runs focused checks
+6. **Verifies integration** — phased end-to-end testing with a Markdown acceptance report
 
 ### Built-in safeguards
 
@@ -74,9 +73,9 @@ Built-in protocol and contract rules prevent common integration mistakes:
 - Refund currency must match original order currency
 - Currency parameterization for multi-currency projects
 
-### Integration verification (Step 7)
+### Integration verification (Step 6)
 
-Phased Step 7 execution with automatic fix-and-retry:
+Phased Step 6 execution with automatic fix-and-retry:
 
 - **Phase A** — 核心测试：`order-create`、`order-create-error`、`payment-success`、`payment-failure`、`webhook-idempotency`
 - **Phase B1/B2** — Pay method coverage: card + non-card (minimum test set from API discovery)
@@ -109,7 +108,7 @@ waffo-integrate/
 │   ├── java.md                           # Java/Spring Boot templates
 │   ├── go.md                             # Go templates
 │   ├── python.md                         # Python (FastAPI/Flask/Django) templates
-│   ├── integration-verification.md       # Step 7 verification protocol
+│   ├── integration-verification.md       # Step 6 verification protocol
 │   ├── acceptance-criteria.md            # Test cards, Playwright scripts, report template
 │   ├── sandbox-knowledge.md              # Sandbox quirks (K024-K030)
 │   ├── business-validation.md            # Integration Quality Radar + passive verification
@@ -120,14 +119,16 @@ waffo-integrate/
 │   ├── INDEX.md                          # Knowledge base index + remote fallback
 │   └── enforcement.md                    # Manifest schema + hook configuration
 ├── evals/
-│   └── evals.json                        # 27 prompt evals, 92 assertions
+│   └── evals.json                        # 30 prompt evals, 100 assertions
 └── tests/
-    └── waffo-verify.test.js              # Executable validator/hook regression tests
+    ├── waffo-verify.test.js              # Executable validator/hook regression tests
+    ├── compile-templates.mjs             # Four-language template gate
+    └── harness/                          # SDK compilers + deterministic contract assertions
 ```
 
 ## Evaluation coverage
 
-The repo currently defines 27 prompt eval scenarios and 92 assertions, plus executable validator/hook regression tests:
+The repo currently defines 30 prompt eval scenarios and 100 assertions, plus executable validator/hook regression tests:
 
 | Eval | Scenario | Assertions | Result |
 |------|----------|-----------|--------|
@@ -158,6 +159,9 @@ The repo currently defines 27 prompt eval scenarios and 92 assertions, plus exec
 | 25 | Recover unknown status with same-key inquiry | 3 | Defined |
 | 26 | Generate 32-character Node request IDs | 3 | Defined |
 | 27 | Keep order/subscription field maps separate | 2 | Defined |
+| 28 | Require goodsInfo and all order redirect URLs | 3 | Defined |
+| 29 | Keep Java subscription templates SDK-compatible | 3 | Defined |
+| 30 | Keep subscription description in productInfo | 2 | Defined |
 
 ## Requirements
 

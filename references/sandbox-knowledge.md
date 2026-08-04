@@ -1,6 +1,6 @@
 # Sandbox Knowledge Base
 
-This file is loaded during **Step 7** test execution only. Contains Sandbox-specific behaviors, quirks, and test strategies.
+This file is loaded during **Step 6** test execution only. Contains Sandbox-specific behaviors, quirks, and test strategies.
 
 ---
 
@@ -59,7 +59,7 @@ This file is loaded during **Step 7** test execution only. Contains Sandbox-spec
 - Missing or wrong Content-Type header
 - Returning HTML or plain text instead of JSON
 
-**Note**: The SDK's `HandleWebhook()` generates the correct JSON response body, but does NOT set the `Content-Type` header — that is the web framework's responsibility. Most frameworks default to `text/plain` for string responses (Gin `c.String()`, Express `res.send()`, Spring `ResponseEntity.ok().body()`). The integration code must explicitly set `Content-Type: application/json`. Step 7 checklist C5 verifies this.
+**Note**: The SDK's `HandleWebhook()` generates the correct JSON response body, but does NOT set the `Content-Type` header — that is the web framework's responsibility. Most frameworks default to `text/plain` for string responses (Gin `c.String()`, Express `res.send()`, Spring `ResponseEntity.ok().body()`). The integration code must explicitly set `Content-Type: application/json`. Step 6 checklist C5 verifies this.
 
 ---
 
@@ -78,7 +78,7 @@ This file is loaded during **Step 7** test execution only. Contains Sandbox-spec
 
 **Symptom**: Integration tests fail intermittently due to the project's own rate limiting middleware blocking rapid API calls.
 
-**Pre-flight Check**: Before starting Step 7, detect if the project has rate limiting (e.g., middleware, Redis-based throttle, Nginx rate limit). If found, **temporarily disable it** for the test session or whitelist the test client IP.
+**Pre-flight Check**: Before starting Step 6, detect if the project has rate limiting (e.g., middleware, Redis-based throttle, Nginx rate limit). If found, **temporarily disable it** for the test session or whitelist the test client IP.
 
 **Why**: Integration tests make many API calls in quick succession (order-create, inquiry, refund, etc.). Project-level rate limiting will cause false failures that are unrelated to the integration itself.
 

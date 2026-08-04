@@ -1,6 +1,6 @@
 # Business Validation Guide
 
-This file is loaded during **Step 7** (Integration Verification) only. It provides code review checklists, business questions, competitor reference guidance, passive verification criteria, and the Integration Quality Radar output model（集成质量雷达输出模型）.
+This file is loaded during **Step 6** (Integration Verification) only. It provides code review checklists, business questions, competitor reference guidance, passive verification criteria, and the Integration Quality Radar output model（集成质量雷达输出模型）.
 
 ---
 
@@ -137,4 +137,4 @@ Example:
 
 ## §5 Integration Acceptance Report Template
 
-Step 7 完成后，只有 report hard gate 通过且最终结果为 `FULL` 或 `CONDITIONAL`，才生成 **Markdown** 正式验收报告。报告必须包含由 §4 生成的 Integration Quality Radar 表。如果最终结果是 `INCOMPLETE`，输出 failed summary，不生成正式报告。Blocked summary、failed summary 和正式报告规则见 `references/acceptance-criteria.md` §4A/§4B。
+Step 6 完成后，只有 report hard gate 通过且最终结果为 `FULL` 或 `CONDITIONAL`，才生成 **Markdown** 正式验收报告。报告必须包含由 §4 生成的 Integration Quality Radar 表。如果最终结果是 `INCOMPLETE`，输出 failed summary，不生成正式报告。Blocked summary、failed summary 和正式报告规则见 `references/acceptance-criteria.md` §4A/§4B。

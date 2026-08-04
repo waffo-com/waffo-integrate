@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.5.1] - 2026-08-04
+
+### Fixed
+
+- **Order-create templates now consistently send `goodsInfo` and all three redirect URLs** (Node/Java/Go/Python). Service and Sandbox test templates are both covered by deterministic checks for every create call, preventing `failedRedirectUrl`/`cancelRedirectUrl` or risk-control identity fields from silently disappearing (Rules 19/21 and verification check C6).
+- **Java subscription template now compiles against `waffo-java` 3.0.0.** Removed the non-existent `ProductInfo.productId(...)`/`.productName(...)` builder calls — the subscription `ProductInfo` type has neither (verified via `javap`); the description now flows to `productInfo.description`. Fixed `cancelSubscription` to use the real `CancelSubscriptionParams.subscriptionId(...)` (the SDK cancel builder has no `subscriptionRequest`). Added the missing checked-exception handling: every write call (`order().create/cancel/refund`, `subscription().create/cancel`) now wraps `WaffoUnknownStatusException` with same-id inquiry recovery (services) or declares `throws` (tests). The full `java.md` now compiles clean — 7 files, main + test.
+- **Node/Go/Python subscription-create** now send the schema-required `subscriptionManagementUrl` plus `failedRedirectUrl`/`cancelRedirectUrl`, drop the non-contract top-level `orderDescription` (Node/Python), and route the description to `productInfo.description` instead of mis-using `productName`.
+- **`cancelSubscription` now keys by `subscriptionId` in all languages.** Every typed SDK (`waffo-node`/`waffo-go`/`waffo-java`) requires `subscriptionId` for cancel — the Node/Python/Java templates were passing `subscriptionRequest` (Go was already correct). Surfaced by the new Node `tsc` pass in the compile harness.
+- **Subscription-cancel recovery now validates inquiry responses before reading data.** Java and Python no longer treat a failed reconciliation inquiry as success; Python also normalizes normal and recovered outcomes to the stable service-layer key `subscriptionStatus`.
+- **Test templates** no longer emit `test@example.com` / `test-user@example.com` (Rule 22) or the invalid `productName: 'Test'` value, and now include the schema-required `userTerminal` plus a minimal `goodsInfo` (aligns with verification check C6).
+- **Stale `userTerminal` enum comments** (`WEB | APP | WAP | SYSTEM`) corrected to `WEB | APP` in Node/Go — `WAP`/`SYSTEM` were removed back in v1.2.0.
+- **`api-contract.md` drift vs live OpenAPI**: subscription redirect URLs and `paymentInfo.payMethodName` re-annotated as schema-optional (with the practical `A0003`/Rule-19 requirements called out); order/subscription `goodsInfo` marked schema-optional/business-required, and subscription `goodsInfo` correctly noted as requiring `goodsId`+`goodsName` when present.
+- **Step-numbering drift** (`Step 7` → `Step 6`, `Step 5` → `Step 4`, `Step 3 Q5` → the Step 2 currency-mode question, Pay Method Discovery re-pointed to `integration-verification.md`) across SKILL.md/README/references now matches the canonical 6-step Flow; `Rule 22` gains a Sandbox-vs-production caveat.
+
+### Added
+
+- Evals 28–30: regression guards for order-create `goodsInfo`+three-redirects, the Java subscription compiling against the SDK (no phantom `ProductInfo` fields, checked-exception handled), and subscription-create rejecting the non-contract `orderDescription`.
+- **Template compile harness** (`tests/compile-templates.mjs` + `tests/harness/*`) — extracts each language's `references/*.md` code blocks and compiles them against pinned Waffo SDKs (Java `javac`, Node `tsc`, Go `go build`, Python `py_compile` + `mypy` against `waffo==0.4.0b0`), plus deterministic contract assertions. Node now compiles the Sandbox test template as well as `src`, including its `vitest` types. Wired into `npm test` (`test:unit` / `test:templates` split) and a CI workflow (`.github/workflows/ci.yml`) that runs all four in `--strict` mode. This mechanically catches template↔SDK drift (phantom fields, wrong methods, unhandled checked exceptions, missing required fields) — the class of defect that previously shipped undetected because nothing compiled the templates.
+
 ## [1.5.0] - 2026-08-03
 
 ### Added

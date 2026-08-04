@@ -1,6 +1,6 @@
 # Code Generation Rules
 
-Loaded from `SKILL.md` during Step 5 before generating Waffo integration code. These rules are intentionally kept outside the main skill body so the entrypoint stays thin.
+Loaded from `SKILL.md` during Step 4 (code preview), before generating Waffo integration code. These rules are intentionally kept outside the main skill body so the entrypoint stays thin.
 
 ## Source of Truth
 
@@ -71,7 +71,7 @@ Generated code MUST cover these four branches and align with the host project's 
 
 10. **paymentInfo.productName**: Use `'ONE_TIME_PAYMENT'` for one-time orders and `'SUBSCRIPTION'` for subscriptions — these are the standard product name values recognized by Waffo.
 
-11. **Subscription-specific field names**: Subscription create uses `currency` and `amount` (NOT `orderCurrency`/`orderAmount` used by order create). Required fields for subscription create: `subscriptionRequest`, `merchantSubscriptionId`, `currency`, `amount`, `notifyUrl`, `successRedirectUrl`, `productInfo` (with `description`, `periodType`, `periodInterval`), `userInfo` (with `userTerminal`), `goodsInfo` (with `goodsId`, `goodsName`, `goodsUrl`), `paymentInfo` (with `productName` and `payMethodType`).
+11. **Subscription-specific field names**: Subscription create uses `currency` and `amount` (NOT `orderCurrency`/`orderAmount` used by order create). Schema-required fields for subscription create (per OpenAPI): `subscriptionRequest`, `merchantSubscriptionId`, `currency`, `amount`, `notifyUrl`, `subscriptionManagementUrl`, `productInfo` (with `description`, `periodType`, `periodInterval`), `userInfo`. Additionally required in practice: `paymentInfo.payMethodType` (server returns A0003 without it — Rule 14), all three redirect URLs (Rule 19), and `goodsInfo` with `goodsName` + `goodsUrl` (business/risk-control requirement — Rule 21; schema-optional).
 
 12. **PeriodType values**: Valid values are `'DAILY'`, `'WEEKLY'`, `'MONTHLY'`. There is no `YEARLY`. Period interval is a string (e.g., `'1'`), not a number.
 
@@ -93,7 +93,7 @@ Generated code MUST cover these four branches and align with the host project's 
 
 21. **Goods compliance fields**: `goodsName` must always be provided. Additionally, provide compliance/risk-control identity via `goodsUrl` or `appName`. If the merchant does not have an App, do **not** invent `appName`; provide `goodsUrl` instead. Default assumption: the merchant is **not** a premium/qualified merchant and cannot omit both `goodsUrl` and `appName`. Only mark an exemption when the user or Waffo explicitly confirms premium merchant exemption. `goodsUrl` must be a product detail page or official website URL, NOT an image URL. `appName` is only for App merchants and must be the app's listed name on App Store / Google Play, not an internal package ID or placeholder.
 
-22. **userEmail format**: Do NOT include the word "test" in `userEmail`. Do NOT share the same email across multiple users. Recommended format for generated emails: `{userId}@example.com`.
+22. **userEmail format**: Do NOT include the word "test" in `userEmail`. Do NOT share the same email across multiple users. Recommended format for generated emails: `{userId}@example.com` (Sandbox only). In production, pass the user's real email address — placeholder domains such as `example.com` are flagged during go-live review.
 
 23. **Card payment payMethodType**: For card-based payments, recommend setting `payMethodType="CREDITCARD,DEBITCARD"` without passing `payMethodName`. This lets Waffo auto-detect the card brand from the BIN (Bank Identification Number).
 
@@ -109,7 +109,7 @@ Generated code MUST cover these four branches and align with the host project's 
 
 29. **Redirect URL format**: Redirect URLs (`successRedirectUrl`, `failedRedirectUrl`, `cancelRedirectUrl`) support both HTTPS links and deeplinks (e.g., `komoe://payment/result`). Both formats are valid.
 
-30. **Currency parameterization**: If the developer answered "multi-currency" in Step 3 Q5, `orderCurrency` (for orders) and `currency` (for subscriptions) MUST be function parameters, NOT hardcoded values. Waffo checkout automatically displays payment methods available for the given currency — the code does not need to handle currency→payment-method mapping.
+30. **Currency parameterization**: If the developer answered "multi-currency" in the Step 2 currency-mode question, `orderCurrency` (for orders) and `currency` (for subscriptions) MUST be function parameters, NOT hardcoded values. Waffo checkout automatically displays payment methods available for the given currency — the code does not need to handle currency→payment-method mapping.
 
 31. **Refund currency must match order currency**: The refund `orderCurrency` and `orderAmount` must use the **original order's currency**, not the project's internal accounting currency. For example, if a user paid in IDR, the refund must also be in IDR — even if the project internally tracks revenue in USD.
 

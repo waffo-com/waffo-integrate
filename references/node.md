@@ -64,10 +64,15 @@ export interface CreatePaymentInput {
   currency: string;
   description: string;
   notifyUrl: string;
-  successRedirectUrl: string;   // URL to redirect after payment
+  successRedirectUrl: string;   // URL to redirect after payment success
+  failedRedirectUrl: string;    // Rule 19: all three redirect URLs are required
+  cancelRedirectUrl: string;
   userId: string;
   userEmail: string;
-  userTerminal?: string;        // WEB | APP | WAP | SYSTEM (default: WEB)
+  userTerminal?: string;        // WEB | APP (default: WEB)
+  goodsName: string;            // Rule 21: always required (risk control / compliance)
+  goodsUrl: string;             // product detail page or official site URL - NOT an image; App-only merchants pass appName instead
+  goodsId?: string;
   payMethodType?: string;       // e.g., 'CREDITCARD', 'EWALLET'
   payMethodName?: string;       // e.g., 'CC_VISA', 'DANA'
 }
@@ -82,10 +87,17 @@ export async function createPayment(input: CreatePaymentInput) {
     orderDescription: input.description,
     notifyUrl: input.notifyUrl,
     successRedirectUrl: input.successRedirectUrl,
+    failedRedirectUrl: input.failedRedirectUrl,
+    cancelRedirectUrl: input.cancelRedirectUrl,
     userInfo: {
       userId: input.userId,
       userEmail: input.userEmail,
       userTerminal: input.userTerminal || 'WEB',
+    },
+    goodsInfo: {
+      goodsId: input.goodsId,
+      goodsName: input.goodsName,   // Rule 21: goodsName always required
+      goodsUrl: input.goodsUrl,     // or appName for App-only merchants (App Store / Google Play listed name)
     },
     paymentInfo: {
       productName: 'ONE_TIME_PAYMENT',
@@ -207,13 +219,16 @@ export interface CreateSubscriptionInput {
   notifyUrl: string;
   userId: string;
   userEmail: string;
-  userTerminal?: string;             // WEB | APP | WAP | SYSTEM (default: WEB)
+  userTerminal?: string;             // WEB | APP (default: WEB)
   productId: string;
   productName: string;
   periodType: 'DAILY' | 'WEEKLY' | 'MONTHLY';
   periodInterval: string;           // e.g., '1' for every period
   goodsUrl: string;
   successRedirectUrl: string;
+  failedRedirectUrl: string;
+  cancelRedirectUrl: string;
+  subscriptionManagementUrl: string;  // Rule 26: required; the page must require login
 }
 
 export async function createSubscription(input: CreateSubscriptionInput) {
@@ -223,11 +238,13 @@ export async function createSubscription(input: CreateSubscriptionInput) {
     merchantSubscriptionId: input.merchantSubscriptionId,
     currency: input.currency,
     amount: input.amount,
-    orderDescription: input.description,
     notifyUrl: input.notifyUrl,
     successRedirectUrl: input.successRedirectUrl,
+    failedRedirectUrl: input.failedRedirectUrl,
+    cancelRedirectUrl: input.cancelRedirectUrl,
+    subscriptionManagementUrl: input.subscriptionManagementUrl,
     productInfo: {
-      description: input.productName,
+      description: input.description,
       periodType: input.periodType,
       periodInterval: input.periodInterval,
     },
@@ -265,9 +282,10 @@ export async function querySubscription(subscriptionRequest: string) {
   return response.getData();
 }
 
-export async function cancelSubscription(subscriptionRequest: string) {
+export async function cancelSubscription(subscriptionId: string) {
   const waffo = getWaffo();
-  const response = await waffo.subscription().cancel({ subscriptionRequest });
+  // Cancel is keyed by the Waffo subscriptionId (from the create response), NOT subscriptionRequest.
+  const response = await waffo.subscription().cancel({ subscriptionId });
 
   if (!response.isSuccess()) {
     throw new Error(`Subscription cancel failed: ${response.getCode()} - ${response.getMessage()}`);
@@ -299,7 +317,7 @@ export interface ChangeSubscriptionInput {
   notifyUrl: string;
   userId: string;
   userEmail: string;
-  userTerminal?: string;             // WEB | APP | WAP | SYSTEM (default: WEB)
+  userTerminal?: string;             // WEB | APP (default: WEB)
   newProductName: string;
   periodType: 'DAILY' | 'WEEKLY' | 'MONTHLY';
   periodInterval: string;
@@ -558,10 +576,14 @@ describe('Waffo Payment Integration', () => {
       merchantOrderId: `test-${Date.now()}`,
       orderCurrency: 'USD',
       orderAmount: '1.00',
-      orderDescription: 'Integration test order',
+      orderDescription: 'Demo order - SDK connectivity check',
       notifyUrl: 'https://example.com/webhook',
-      userInfo: { userId: 'test-user', userEmail: 'test@example.com' },
-      paymentInfo: { productName: 'Test' },
+      successRedirectUrl: 'https://example.com/success',
+      failedRedirectUrl: 'https://example.com/failed',
+      cancelRedirectUrl: 'https://example.com/cancel',
+      userInfo: { userId: 'demo-user-001', userEmail: 'demo-user-001@example.com', userTerminal: 'WEB' },
+      goodsInfo: { goodsName: 'Demo Goods', goodsUrl: 'https://www.example.com/products/demo' },
+      paymentInfo: { productName: 'ONE_TIME_PAYMENT' },
     });
 
     if (!response.isSuccess()) {
@@ -586,10 +608,14 @@ describe('Waffo Payment Integration', () => {
       merchantOrderId: `test-${Date.now()}`,
       orderCurrency: 'USD',
       orderAmount: '1.00',
-      orderDescription: 'Test',
+      orderDescription: 'Demo order - inquiry flow',
       notifyUrl: 'https://example.com/webhook',
-      userInfo: { userId: 'test-user', userEmail: 'test@example.com' },
-      paymentInfo: { productName: 'Test' },
+      successRedirectUrl: 'https://example.com/success',
+      failedRedirectUrl: 'https://example.com/failed',
+      cancelRedirectUrl: 'https://example.com/cancel',
+      userInfo: { userId: 'demo-user-001', userEmail: 'demo-user-001@example.com', userTerminal: 'WEB' },
+      goodsInfo: { goodsName: 'Demo Goods', goodsUrl: 'https://www.example.com/products/demo' },
+      paymentInfo: { productName: 'ONE_TIME_PAYMENT' },
     });
 
     // Then query

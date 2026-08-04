@@ -28,7 +28,7 @@ All responses: `{ code: string, msg: string, data: <DataSchema> }`
 - `extendInfo`: string — max 128, JSON
 - `merchantInfo`: MerchantInfo (required)
 - `userInfo`: OrderUserInfo (required)
-- `goodsInfo`: OrderGoodsInfo
+- `goodsInfo`: OrderGoodsInfo — schema-optional, **business-required**: always send `goodsName`, plus `goodsUrl` or `appName` (Rule 21; Waffo acceptance review enforces this)
 - `paymentInfo`: OrderPaymentInfo (required)
 - `cardInfo`: CardInfo
 - `paymentTokenData`: string — max 8192, ApplePay/GooglePay
@@ -160,13 +160,13 @@ All responses: `{ code: string, msg: string, data: <DataSchema> }`
 - `productInfo`: ProductInfo (required)
 - `merchantInfo`: MerchantInfo (required)
 - `userInfo`: UserInfo (required)
-- `goodsInfo`: GoodsInfo
+- `goodsInfo`: GoodsInfo — schema-optional object; when present, schema requires `goodsId` + `goodsName` (OpenAPI). Business rule (Rule 21): send `goodsName` + `goodsUrl` or `appName`
 - `addressInfo`: AddressInfo
-- `paymentInfo`: PaymentInfo (required — productName, payMethodName required)
+- `paymentInfo`: PaymentInfo (schema-optional object; required in practice — server returns A0003 without `payMethodType` (Rule 14). Within it only `productName` is schema-required; `payMethodName` is optional)
 - `requestedAt`: string/date-time (required)
-- `successRedirectUrl`: string (required) — max 512
-- `failedRedirectUrl`: string (required) — max 512
-- `cancelRedirectUrl`: string (required) — max 512
+- `successRedirectUrl`: string — max 512 (schema-optional; Rule 19 requires it)
+- `failedRedirectUrl`: string — max 512 (schema-optional; Rule 19 requires it)
+- `cancelRedirectUrl`: string — max 512 (schema-optional; Rule 19 requires it)
 - `notifyUrl`: string (required) — max 256
 - `subscriptionManagementUrl`: string (required) — max 256
 - `extendInfo`: string — max 256, JSON
@@ -218,6 +218,7 @@ All responses: `{ code: string, msg: string, data: <DataSchema> }`
 - `subscriptionId`: string (required) — max 64
 - `merchantId`: string (required) — max 64
 - `requestedAt`: string/date-time (required)
+- Note: cancel accepts **only** `subscriptionId` (from the create response). Unlike `inquiry`/`manage`, it does **not** accept `subscriptionRequest` — the request key is `subscriptionId` even though the response below echoes both IDs.
 
 **Response** (`SubscriptionCancelResponse`):
 - `merchantSubscriptionId`: string
@@ -352,7 +353,7 @@ Same as ProductInfo but adds:
 ### PaymentInfo (Subscription)
 - `productName`: string (required) — "SUBSCRIPTION" | "MINI_PROGRAM_SUBSCRIPTION", max 32
 - `payMethodType`: string — "EWALLET" | "CREDITCARD" | "DEBITCARD", max 16
-- `payMethodName`: string (required) — max 24
+- `payMethodName`: string — max 24 (schema-optional; not to be confused with `payMethodType`, which is server-enforced for subscription create — Rule 14)
 - `payMethodProperties`: string — max 256, JSON
 - `payMethodResponse`: string — max 256, read-only
 - `payMethodUserAccountType`: string — "EMAIL" | "PHONE_NO" | "ACCOUNT_ID", max 24
@@ -480,7 +481,7 @@ Same as ProductInfo but adds:
 | Waffo ID | `acquiringOrderId` | `subscriptionId` |
 | Merchant ID field | nested in `merchantInfo` | nested in `merchantInfo` (or top-level `merchantId` for cancel) |
 | Redirect URLs | optional | `successRedirectUrl`, `failedRedirectUrl`, `cancelRedirectUrl` all required for create |
-| GoodsInfo required fields | `goodsName`, `goodsUrl`, `appName` | none (all optional) |
+| GoodsInfo | object is schema-optional; when present, schema requires `goodsName`/`goodsUrl`/`appName`. Business rule (Rule 21): always send `goodsName` + `goodsUrl` or `appName` | object is schema-optional; when present, schema requires `goodsId` + `goodsName`. Same business rule (Rule 21) applies |
 | UserInfo required fields | `userId`, `userEmail`, `userTerminal` | `userId`, `userEmail` |
 | PaymentInfo productName | "ONE_TIME_PAYMENT" / "DIRECT_PAYMENT" | "SUBSCRIPTION" / "MINI_PROGRAM_SUBSCRIPTION" |
 

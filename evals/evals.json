@@ -768,6 +768,78 @@
           "critical": true
         }
       ]
+    },
+    {
+      "id": 28,
+      "prompt": "Generate the Waffo order-create code for my Node.js project at ./my-project (credentials in .env). Show the full createPayment request payload.",
+      "expected_output": "Order create MUST include goodsInfo (goodsName plus goodsUrl or appName — risk-control/compliance, Rule 21) and all three redirect URLs: successRedirectUrl, failedRedirectUrl, and cancelRedirectUrl (Rule 19). Omitting goodsInfo, or sending only successRedirectUrl while dropping the failed/cancel redirect, is a defect.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "order_create_has_goodsInfo",
+          "type": "output_contains",
+          "check": "Order-create payload includes goodsInfo with goodsName and goodsUrl (or appName) — not omitted",
+          "critical": true
+        },
+        {
+          "name": "order_create_all_three_redirects",
+          "type": "output_contains",
+          "check": "Order-create payload includes all three redirect URLs: successRedirectUrl, failedRedirectUrl, and cancelRedirectUrl",
+          "critical": true
+        },
+        {
+          "name": "order_create_not_only_success_redirect",
+          "type": "output_not_contains",
+          "check": "Does NOT include only successRedirectUrl while omitting failedRedirectUrl and cancelRedirectUrl",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 29,
+      "prompt": "Generate the Java Spring Boot subscription-service code for Waffo (project ./my-project, credentials in env). It must compile against the waffo-java SDK.",
+      "expected_output": "Java subscription create must use only real ProductInfo builder methods (description, periodType, periodInterval, ...). Subscription ProductInfo has NO productId or productName — productName lives on paymentInfo, and the goods identity lives on goodsInfo.goodsName. Write operations (subscription().create / cancel) throw the checked WaffoUnknownStatusException and must be handled (try/catch with same-id inquiry recovery, or a throws declaration) so the code compiles. subscriptionManagementUrl and all three redirect URLs are included.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "java_sub_no_productinfo_productid_productname",
+          "type": "output_not_contains",
+          "check": "Java subscription ProductInfo.builder() does NOT call .productId(...) or .productName(...) — those methods do not exist on the subscription ProductInfo type and would fail to compile",
+          "critical": true
+        },
+        {
+          "name": "java_sub_handles_unknown_status_exception",
+          "type": "output_contains",
+          "check": "Java write operations handle the checked WaffoUnknownStatusException (try/catch with same request-id inquiry recovery, or a throws declaration) so the generated code compiles",
+          "critical": true
+        },
+        {
+          "name": "java_sub_includes_managementUrl_and_redirects",
+          "type": "output_contains",
+          "check": "Java subscription create includes subscriptionManagementUrl and all three redirect URLs (successRedirectUrl, failedRedirectUrl, cancelRedirectUrl)",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "prompt": "Generate the Waffo subscription-create payload for my Python FastAPI project. Show the exact request dict.",
+      "expected_output": "Subscription create must include subscriptionManagementUrl (schema-required) and must NOT include a top-level orderDescription — that field does not exist on subscription create; the human-readable description belongs in productInfo.description.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "sub_create_has_managementUrl",
+          "type": "output_contains",
+          "check": "Subscription-create payload includes subscriptionManagementUrl",
+          "critical": true
+        },
+        {
+          "name": "sub_create_no_top_level_orderDescription",
+          "type": "output_not_contains",
+          "check": "Subscription-create payload does NOT include a top-level orderDescription key (that field does not exist on subscription create; description goes in productInfo.description)",
+          "critical": true
+        }
+      ]
     }
   ]
 }
