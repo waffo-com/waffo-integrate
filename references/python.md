@@ -236,7 +236,11 @@ def capture_order(payment_request_id: str, capture_amount: str) -> dict[str, Any
             f"Order capture failed: {response.get_code()} - {response.get_message()}"
         )
 
-    return response.get_data() or {}
+    data = response.get_data()
+    return {
+        "acquiringOrderId": data.acquiring_order_id if data else None,
+        "orderStatus": data.order_status if data else None,
+    }
 ```
 
 ---
@@ -463,7 +467,7 @@ def cancel_subscription(subscription_id: str) -> dict[str, Any]:
         )
 
     data = response.get_data()
-    return {"subscriptionStatus": data.subscription_status if data else None}
+    return {"orderStatus": data.order_status if data else None}
 
 
 def manage_subscription(subscription_request: str) -> str | None:

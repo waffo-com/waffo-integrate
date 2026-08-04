@@ -30,10 +30,6 @@ jobs:
         with:
           python-version: '3.12'
 
-      # Optional: deeper Python type checking (py_compile always runs without these).
-      - name: Install Python type tooling
-        run: pip install pyright waffo || true
-
       - name: Unit tests (enforcement verifier)
         run: npm run test:unit
 

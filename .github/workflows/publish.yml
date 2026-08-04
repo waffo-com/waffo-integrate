@@ -55,8 +55,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install Python type tooling
-        run: pip install pyright waffo || true
 
       - name: Unit tests (enforcement verifier)
         run: npm run test:unit
