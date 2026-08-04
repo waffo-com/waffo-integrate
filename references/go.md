@@ -707,6 +707,8 @@ func TestCreateOrder(t *testing.T) {
 		OrderDescription:   "Demo order - SDK connectivity check",
 		NotifyURL:          "https://example.com/webhook",
 		SuccessRedirectURL: "https://example.com/success",
+		FailedRedirectURL:  "https://example.com/failed",
+		CancelRedirectURL:  "https://example.com/cancel",
 		UserInfo: &order.UserInfo{
 			UserID:       "demo-user-001",
 			UserEmail:    "demo-user-001@example.com",
@@ -755,6 +757,8 @@ func TestQueryOrder(t *testing.T) {
 		OrderDescription:   "Demo order - inquiry flow",
 		NotifyURL:          "https://example.com/webhook",
 		SuccessRedirectURL: "https://example.com/success",
+		FailedRedirectURL:  "https://example.com/failed",
+		CancelRedirectURL:  "https://example.com/cancel",
 		UserInfo:           &order.UserInfo{UserID: "demo-user-001", UserEmail: "demo-user-001@example.com", UserTerminal: "WEB"},
 		GoodsInfo:          &order.GoodsInfo{GoodsName: "Demo Goods", GoodsURL: "https://www.example.com/products/demo"},
 		PaymentInfo:        &order.PaymentInfo{ProductName: "ONE_TIME_PAYMENT"},

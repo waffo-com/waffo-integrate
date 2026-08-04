@@ -30,6 +30,11 @@ function allRefs(byLang) {
   return LANGS.flatMap((l) => (byLang[l] || []).map((b) => b.code)).join('\n');
 }
 
+/** Number of non-overlapping matches; callers pass a global RegExp. */
+function countMatches(code, re) {
+  return [...code.matchAll(re)].length;
+}
+
 export function runStaticSpec(repoRoot) {
   const byLang = loadBlocks(repoRoot);
   const refs = allRefs(byLang);
@@ -52,16 +57,46 @@ export function runStaticSpec(repoRoot) {
 
   // --- order-create payload contract (goodsInfo + all three redirect URLs) ---
   const orderPatterns = {
-    node: { re: /payment-service/, goods: /goodsInfo/, sr: /successRedirectUrl/, fr: /failedRedirectUrl/, cr: /cancelRedirectUrl/ },
-    java: { re: /PaymentService\.java/, goods: /\.goodsInfo\(/, sr: /successRedirectUrl/, fr: /failedRedirectUrl/, cr: /cancelRedirectUrl/ },
-    go: { re: /payment\.go/, goods: /GoodsInfo:/, sr: /SuccessRedirectURL/, fr: /FailedRedirectURL/, cr: /CancelRedirectURL/ },
-    python: { re: /payment_service\.py/, goods: /goodsInfo/, sr: /successRedirectUrl/, fr: /failedRedirectUrl/, cr: /cancelRedirectUrl/ },
+    node: {
+      paths: /(?:payment-service|payment\.test)\.ts/,
+      create: /\.order\(\)\.create\(/g,
+      fields: { goodsInfo: /goodsInfo/g, successRedirectUrl: /successRedirectUrl/g,
+        failedRedirectUrl: /failedRedirectUrl/g, cancelRedirectUrl: /cancelRedirectUrl/g },
+    },
+    java: {
+      paths: /(?:PaymentService|WaffoIntegrationTest)\.java/,
+      create: /\.order\(\)\.create\(/g,
+      fields: { goodsInfo: /\.goodsInfo\(/g, successRedirectUrl: /\.successRedirectUrl\(/g,
+        failedRedirectUrl: /\.failedRedirectUrl\(/g, cancelRedirectUrl: /\.cancelRedirectUrl\(/g },
+    },
+    go: {
+      paths: /(?:payment|waffo_test)\.go/,
+      create: /\.Order\(\)\.Create\(/g,
+      fields: { goodsInfo: /GoodsInfo:/g, successRedirectUrl: /SuccessRedirectURL:/g,
+        failedRedirectUrl: /FailedRedirectURL:/g, cancelRedirectUrl: /CancelRedirectURL:/g },
+    },
+    python: {
+      paths: /(?:payment_service|test_payment)\.py/,
+      create: /\.order\(\)\.create\(/g,
+      fields: { goodsInfo: /["']goodsInfo["']\s*:/g, successRedirectUrl: /["']successRedirectUrl["']\s*:/g,
+        failedRedirectUrl: /["']failedRedirectUrl["']\s*:/g, cancelRedirectUrl: /["']cancelRedirectUrl["']\s*:/g },
+    },
   };
   for (const lang of LANGS) {
     const p = orderPatterns[lang];
-    const code = block(byLang, lang, p.re);
-    assert(`${lang}: order-create includes goodsInfo`, p.goods.test(code));
-    assert(`${lang}: order-create includes all 3 redirect URLs`, p.sr.test(code) && p.fr.test(code) && p.cr.test(code));
+    const candidates = byLang[lang].filter((b) => b.path && p.paths.test(b.path));
+    assert(`${lang}: service and Sandbox test order-create blocks are covered`, candidates.length === 2,
+      `expected 2 blocks, found ${candidates.length}`);
+    for (const candidate of candidates) {
+      const createCalls = countMatches(candidate.code, p.create);
+      assert(`${lang}: ${candidate.path} contains order-create calls`, createCalls > 0);
+      for (const [field, fieldPattern] of Object.entries(p.fields)) {
+        const fieldCount = countMatches(candidate.code, fieldPattern);
+        assert(`${lang}: ${candidate.path} includes ${field} in every order-create`,
+          createCalls > 0 && fieldCount >= createCalls,
+          `create calls=${createCalls}, ${field} occurrences=${fieldCount}`);
+      }
+    }
   }
 
   // --- subscription-create contract (managementUrl present; no non-contract orderDescription) ---
@@ -80,13 +115,21 @@ export function runStaticSpec(repoRoot) {
   }
 
   // --- cancelSubscription must be keyed by subscriptionId (all SDKs require it) ---
-  // Go/Java are caught by their compilers; assert the dynamic/loosely-typed ones here.
+  // Go/Java key types are compiler-checked; assert dynamic keys and recovery semantics here.
   const nodeSub = block(byLang, 'node', /subscription-service/);
+  const javaSub = block(byLang, 'java', /SubscriptionService\.java/);
   const pySub = block(byLang, 'python', /subscription_service\.py/);
   assert('node: cancelSubscription keyed by subscriptionId (not subscriptionRequest)',
     /cancel\(\{\s*subscriptionId/.test(nodeSub) && !/cancel\(\{\s*subscriptionRequest/.test(nodeSub));
   assert('python: cancel_subscription keyed by subscriptionId (not subscriptionRequest)',
     /cancel\(\{["']subscriptionId/.test(pySub) && !/cancel\(\{["']subscriptionRequest/.test(pySub));
+  assert('python: cancel_subscription checks recovery inquiry before reading data',
+    /inquiry_response\s*=[\s\S]*?if not inquiry_response\.is_success\(\):[\s\S]*?inquiry_response\.get_data\(\)/.test(pySub));
+  assert('java: cancelSubscription checks recovery inquiry before reading data',
+    /ApiResponse<InquirySubscriptionData> inquiryResponse\s*=[\s\S]*?if \(!inquiryResponse\.isSuccess\(\)\)[\s\S]*?inquiryResponse\.getData\(\)/.test(javaSub));
+  assert('python: cancel_subscription returns one stable subscriptionStatus key',
+    countMatches(pySub, /return \{["']subscriptionStatus["']/g) >= 2 &&
+      !/return \{["']orderStatus["']/.test(pySub));
 
   return results;
 }

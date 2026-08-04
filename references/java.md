@@ -416,8 +416,13 @@ public class SubscriptionService {
             response = waffo.subscription().cancel(params);
         } catch (WaffoUnknownStatusException e) {
             // Unknown network status — reconcile via inquiry on the SAME subscriptionId (Rule: cancel -> inquiry).
-            InquirySubscriptionData reconciled = waffo.subscription().inquiry(
-                    InquirySubscriptionParams.builder().subscriptionId(subscriptionId).build()).getData().orElse(null);
+            ApiResponse<InquirySubscriptionData> inquiryResponse = waffo.subscription().inquiry(
+                    InquirySubscriptionParams.builder().subscriptionId(subscriptionId).build());
+            if (!inquiryResponse.isSuccess()) {
+                throw new IllegalStateException("Subscription cancel inquiry failed: " +
+                        inquiryResponse.getCode() + " - " + inquiryResponse.getMessage().orElse(""), e);
+            }
+            InquirySubscriptionData reconciled = inquiryResponse.getData().orElse(null);
             throw new IllegalStateException("Subscription cancel returned unknown status; reconciled=" + reconciled
                     + " for subscriptionId=" + subscriptionId + ".", e);
         }
@@ -610,6 +615,8 @@ class WaffoIntegrationTest {
                 .orderDescription("Demo order - SDK connectivity check")
                 .notifyUrl("https://example.com/webhook")
                 .successRedirectUrl("https://example.com/success")
+                .failedRedirectUrl("https://example.com/failed")
+                .cancelRedirectUrl("https://example.com/cancel")
                 .userInfo(UserInfo.builder()
                         .userId("demo-user-001")
                         .userEmail("demo-user-001@example.com")
@@ -649,6 +656,8 @@ class WaffoIntegrationTest {
                 .orderDescription("Demo order - inquiry flow")
                 .notifyUrl("https://example.com/webhook")
                 .successRedirectUrl("https://example.com/success")
+                .failedRedirectUrl("https://example.com/failed")
+                .cancelRedirectUrl("https://example.com/cancel")
                 .userInfo(UserInfo.builder().userId("demo-user-001").userEmail("demo-user-001@example.com").userTerminal(UserTerminalType.WEB).build())
                 .goodsInfo(GoodsInfo.builder().goodsName("Demo Goods").goodsUrl("https://www.example.com/products/demo").build())
                 .paymentInfo(PaymentInfo.builder().productName(ProductName.ONE_TIME_PAYMENT).build())

@@ -29,17 +29,20 @@ export async function checkNode(repoRoot) {
   const sdkSpec = LOCAL_SDK ? `file:${LOCAL_SDK}` : WAFFO_NODE_VERSION;
   fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({
     name: 'waffo-node-templates', private: true, version: '1.0.0',
-    devDependencies: { typescript: '^5.5.0', '@types/node': '^20', '@waffo/waffo-node': sdkSpec },
+    devDependencies: {
+      typescript: '^5.5.0', '@types/node': '^20', vitest: '1.6.1',
+      '@waffo/waffo-node': sdkSpec,
+    },
   }, null, 2));
   fs.writeFileSync(path.join(dir, 'tsconfig.json'), JSON.stringify({
     compilerOptions: {
       target: 'ES2021', module: 'NodeNext', moduleResolution: 'NodeNext',
       noEmit: true, skipLibCheck: true, esModuleInterop: true, strict: false, types: ['node'],
     },
-    include: ['src/**/*.ts'],
+    include: ['src/**/*.ts', 'tests/**/*.ts'],
   }, null, 2));
 
-  const install = run('npm', ['install', '--silent', '--no-audit', '--no-fund'], { cwd: dir, allowFail: true });
+  const install = run('npm', ['install', '--loglevel=error', '--no-audit', '--no-fund'], { cwd: dir, allowFail: true });
   if (install.status !== 0) {
     return { lang: 'node', skipped: `npm install failed (SDK/toolchain not resolvable): ${firstLine(install.stderr)}` };
   }

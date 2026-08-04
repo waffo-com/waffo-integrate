@@ -20,7 +20,10 @@ export async function checkGo(repoRoot) {
   const dir = tmpDir('waffo-go');
   writeProject(dir, blocks);
   fs.writeFileSync(path.join(dir, 'go.mod'),
-    `module waffo.harness/templates\n\ngo 1.21\n\nrequire ${WAFFO_GO} ${WAFFO_GO_VERSION}\n`);
+    `module waffo.harness/templates\n\ngo 1.21\n\nrequire (\n` +
+    `\t${WAFFO_GO} ${WAFFO_GO_VERSION}\n` +
+    `\tgithub.com/google/uuid v1.6.0\n` +
+    `)\n`);
 
   // Resolve deps into the module graph (network in CI; module cache locally).
   const env = { GOFLAGS: '-mod=mod', GOSUMDB: 'off' };

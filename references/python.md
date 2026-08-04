@@ -456,9 +456,15 @@ def cancel_subscription(subscription_id: str) -> dict[str, Any]:
     try:
         # Cancel is keyed by the Waffo subscriptionId (from the create response), NOT subscriptionRequest.
         response = waffo.subscription().cancel({"subscriptionId": subscription_id})
-    except WaffoUnknownStatusError:
+    except WaffoUnknownStatusError as error:
         # Unknown status — reconcile with an inquiry keyed by the SAME subscriptionId.
-        recovered = waffo.subscription().inquiry({"subscriptionId": subscription_id}).get_data()
+        inquiry_response = waffo.subscription().inquiry({"subscriptionId": subscription_id})
+        if not inquiry_response.is_success():
+            raise RuntimeError(
+                "Subscription cancel inquiry failed: "
+                f"{inquiry_response.get_code()} - {inquiry_response.get_message()}"
+            ) from error
+        recovered = inquiry_response.get_data()
         return {"subscriptionStatus": recovered.subscription_status if recovered else None}
 
     if not response.is_success():
@@ -467,7 +473,9 @@ def cancel_subscription(subscription_id: str) -> dict[str, Any]:
         )
 
     data = response.get_data()
-    return {"orderStatus": data.order_status if data else None}
+    # The cancel response exposes order_status, while inquiry exposes subscription_status.
+    # Normalize both SDK response shapes to one stable service-layer field.
+    return {"subscriptionStatus": data.order_status if data else None}
 
 
 def manage_subscription(subscription_request: str) -> str | None:
@@ -880,6 +888,9 @@ def test_create_payment_order(waffo: Waffo) -> None:
             "orderAmount": "1.00",
             "orderDescription": "Demo order - SDK connectivity check",
             "notifyUrl": "https://example.com/webhook",
+            "successRedirectUrl": "https://example.com/success",
+            "failedRedirectUrl": "https://example.com/failed",
+            "cancelRedirectUrl": "https://example.com/cancel",
             "userInfo": {
                 "userId": "demo-user-001",
                 "userEmail": "demo-user-001@example.com",
@@ -914,6 +925,9 @@ def test_inquiry_order(waffo: Waffo) -> None:
             "orderAmount": "1.00",
             "orderDescription": "Demo order - inquiry flow",
             "notifyUrl": "https://example.com/webhook",
+            "successRedirectUrl": "https://example.com/success",
+            "failedRedirectUrl": "https://example.com/failed",
+            "cancelRedirectUrl": "https://example.com/cancel",
             "userInfo": {
                 "userId": "demo-user-001",
                 "userEmail": "demo-user-001@example.com",
