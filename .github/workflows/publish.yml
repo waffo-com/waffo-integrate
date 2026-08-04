@@ -41,8 +41,30 @@ jobs:
           fi
           echo "All internal links valid."
 
-      - name: Run enforcement regression tests
-        run: npm test
+      # Full release gate: the templates in references/*.md must compile against the
+      # pinned Waffo SDKs in every language before anything is published. --strict makes
+      # a missing toolchain/SDK a hard failure (never a silent skip), so a tag can never
+      # publish a package whose templates don't actually compile.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Python type tooling
+        run: pip install pyright waffo || true
+
+      - name: Unit tests (enforcement verifier)
+        run: npm run test:unit
+
+      - name: Template compile harness (strict — all 4 languages must compile before publish)
+        run: node tests/compile-templates.mjs --strict
+        env:
+          WAFFO_HARNESS_STRICT: '1'
 
       - name: Debug npm publish context
         run: |
