@@ -1,6 +1,6 @@
 # Integration Verification Protocol
 
-This file contains the complete Step 7 verification protocol. It is loaded on demand when the developer triggers integration testing.
+This file contains the complete Step 6 verification protocol. It is loaded on demand when the developer triggers integration testing.
 
 ---
 
@@ -12,9 +12,9 @@ Test the integration end-to-end **through the project's own endpoints**, not by 
 
 ### Entry Conditions
 
-Step 7 can be entered two ways:
+Step 6 can be entered two ways:
 
-1. **After Step 6** — natural continuation after writing integration code
+1. **After Step 5** — natural continuation after writing integration code
 2. **Direct trigger** — developer says "跑集成测试" on an already-integrated project
 
 Direct trigger starts at Phase A. It does NOT allow skipping required phases or jumping straight to a final report.
@@ -23,7 +23,7 @@ Direct trigger starts at Phase A. It does NOT allow skipping required phases or 
 
 ## Phased Execution (MANDATORY)
 
-Step 7 is split into phases with explicit checkpoints. This prevents context exhaustion.
+Step 6 is split into phases with explicit checkpoints. This prevents context exhaustion.
 
 ```
 Phase A — Core Tests (~15 tool calls):
@@ -105,7 +105,7 @@ If context is running low and you need to offload Phase B1/B2, dispatch agents w
 
 ## Context Budget Rules
 
-Before starting Step 7, estimate the tool call budget:
+Before starting Step 6, estimate the tool call budget:
 
 | Mode | Calls per card payment | 8 card brands total |
 |------|----------------------|-------------------|
@@ -419,7 +419,7 @@ Read `references/acceptance-criteria.md` for the full criteria definitions. The 
 
 Refund execution rule: `refund-webhook` must use a paid e-wallet source when any contracted e-wallet was successfully paid in Phase B2. Prefer DANA first in Sandbox, then other paid e-wallets, and only fall back to card when there is no paid e-wallet source. If an e-wallet returns `A0014` or another refund-rule error, record that attempt and continue to the next paid e-wallet before classifying the case.
 
-**Multi-currency (if developer answered "multi-currency" in Step 3 Q5):**
+**Multi-currency (if developer answered "multi-currency" in the Step 2 currency-mode question):**
 
 | Test Item | What to verify |
 |-----------|----------------|

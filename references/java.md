@@ -118,6 +118,7 @@ package com.example.service;
 import com.waffo.Waffo;
 import com.waffo.types.ApiResponse;
 import com.waffo.types.iso.CurrencyCode;
+import com.waffo.exception.WaffoUnknownStatusException;
 import com.waffo.types.order.*;
 import com.waffo.types.payment.ProductName;
 import org.springframework.stereotype.Service;
@@ -141,26 +142,45 @@ public class PaymentService {
     public CreateOrderData createPayment(String merchantOrderId, String amount,
                                           CurrencyCode currency, String description,
                                           String notifyUrl, String successRedirectUrl,
-                                          String userId, String userEmail) {
+                                          String failedRedirectUrl, String cancelRedirectUrl,
+                                          String userId, String userEmail,
+                                          String goodsId, String goodsName, String goodsUrl) {
+        String paymentRequestId = genRequestId();
         CreateOrderParams params = CreateOrderParams.builder()
-                .paymentRequestId(genRequestId())
+                .paymentRequestId(paymentRequestId)
                 .merchantOrderId(merchantOrderId)
                 .orderCurrency(currency)
                 .orderAmount(amount)
                 .orderDescription(description)
                 .notifyUrl(notifyUrl)
                 .successRedirectUrl(successRedirectUrl)
+                .failedRedirectUrl(failedRedirectUrl)   // Rule 19: all three redirect URLs
+                .cancelRedirectUrl(cancelRedirectUrl)
                 .userInfo(UserInfo.builder()
                         .userId(userId)
                         .userEmail(userEmail)
                         .userTerminal(UserTerminalType.WEB)
+                        .build())
+                .goodsInfo(GoodsInfo.builder()
+                        .goodsId(goodsId)
+                        .goodsName(goodsName)           // Rule 21: goodsName always required
+                        .goodsUrl(goodsUrl)             // or appName for App-only merchants
                         .build())
                 .paymentInfo(PaymentInfo.builder()
                         .productName(ProductName.ONE_TIME_PAYMENT)
                         .build())
                 .build();
 
-        ApiResponse<CreateOrderData> response = waffo.order().create(params);
+        ApiResponse<CreateOrderData> response;
+        try {
+            response = waffo.order().create(params);
+        } catch (WaffoUnknownStatusException e) {
+            // Unknown network status — the order may already exist. Never assume failure.
+            // Reconcile with an idempotent inquiry on the SAME paymentRequestId (Rule: create -> inquiry).
+            InquiryOrderData reconciled = queryOrder(paymentRequestId);
+            throw new IllegalStateException("Order create returned unknown status; reconciled=" + reconciled
+                    + " for paymentRequestId=" + paymentRequestId + ". Reconcile before treating as failed.", e);
+        }
 
         if (!response.isSuccess()) {
             throw new RuntimeException("Payment creation failed: " +
@@ -190,7 +210,15 @@ public class PaymentService {
                 .paymentRequestId(paymentRequestId)
                 .build();
 
-        ApiResponse<CancelOrderData> response = waffo.order().cancel(params);
+        ApiResponse<CancelOrderData> response;
+        try {
+            response = waffo.order().cancel(params);
+        } catch (WaffoUnknownStatusException e) {
+            // Unknown network status — reconcile via inquiry on the SAME paymentRequestId (Rule: cancel -> inquiry).
+            InquiryOrderData reconciled = queryOrder(paymentRequestId);
+            throw new IllegalStateException("Order cancel returned unknown status; reconciled=" + reconciled
+                    + " for paymentRequestId=" + paymentRequestId + ".", e);
+        }
 
         if (!response.isSuccess()) {
             throw new RuntimeException("Order cancel failed: " +
@@ -212,6 +240,7 @@ package com.example.service;
 
 import com.waffo.Waffo;
 import com.waffo.types.ApiResponse;
+import com.waffo.exception.WaffoUnknownStatusException;
 import com.waffo.types.order.RefundOrderParams;
 import com.waffo.types.order.RefundOrderData;
 import com.waffo.types.refund.InquiryRefundParams;
@@ -231,14 +260,23 @@ public class RefundService {
 
     public RefundOrderData refundOrder(String acquiringOrderId,
                                         String refundAmount, String refundReason) {
+        String refundRequestId = UUID.randomUUID().toString().replace("-", "");
         RefundOrderParams params = RefundOrderParams.builder()
-                .refundRequestId(UUID.randomUUID().toString().replace("-", ""))
+                .refundRequestId(refundRequestId)
                 .acquiringOrderId(acquiringOrderId)
                 .refundAmount(refundAmount)
                 .refundReason(refundReason)
                 .build();
 
-        ApiResponse<RefundOrderData> response = waffo.order().refund(params);
+        ApiResponse<RefundOrderData> response;
+        try {
+            response = waffo.order().refund(params);
+        } catch (WaffoUnknownStatusException e) {
+            // Unknown network status — reconcile via inquiry on the SAME refundRequestId (Rule: refund -> refund inquiry).
+            InquiryRefundData reconciled = queryRefund(refundRequestId);
+            throw new IllegalStateException("Refund returned unknown status; reconciled=" + reconciled
+                    + " for refundRequestId=" + refundRequestId + ".", e);
+        }
 
         if (!response.isSuccess()) {
             throw new RuntimeException("Refund failed: " +
@@ -276,6 +314,7 @@ package com.example.service;
 import com.waffo.Waffo;
 import com.waffo.types.ApiResponse;
 import com.waffo.types.iso.CurrencyCode;
+import com.waffo.exception.WaffoUnknownStatusException;
 import com.waffo.types.payment.SubscriptionProductName;
 import com.waffo.types.subscription.*;
 import org.springframework.stereotype.Service;
@@ -299,11 +338,11 @@ public class SubscriptionService {
                                                       String cancelRedirectUrl,
                                                       String subscriptionManagementUrl,
                                                       String userId, String userEmail,
-                                                      String productId, String productName,
                                                       String goodsId, String goodsName,
                                                       String goodsUrl) {
+        String subscriptionRequest = UUID.randomUUID().toString().replace("-", "");
         CreateSubscriptionParams params = CreateSubscriptionParams.builder()
-                .subscriptionRequest(UUID.randomUUID().toString().replace("-", ""))
+                .subscriptionRequest(subscriptionRequest)
                 .merchantSubscriptionId(merchantSubscriptionId)
                 .currency(currency)
                 .amount(amount)
@@ -313,8 +352,6 @@ public class SubscriptionService {
                 .cancelRedirectUrl(cancelRedirectUrl)
                 .subscriptionManagementUrl(subscriptionManagementUrl)
                 .productInfo(ProductInfo.builder()
-                        .productId(productId)
-                        .productName(productName)
                         .description(description)
                         .periodType(PeriodType.MONTHLY)
                         .periodInterval("1")
@@ -335,7 +372,15 @@ public class SubscriptionService {
                         .build())
                 .build();
 
-        ApiResponse<CreateSubscriptionData> response = waffo.subscription().create(params);
+        ApiResponse<CreateSubscriptionData> response;
+        try {
+            response = waffo.subscription().create(params);
+        } catch (WaffoUnknownStatusException e) {
+            // Unknown network status — reconcile via inquiry on the SAME subscriptionRequest (Rule: create -> inquiry).
+            InquirySubscriptionData reconciled = querySubscription(subscriptionRequest);
+            throw new IllegalStateException("Subscription create returned unknown status; reconciled=" + reconciled
+                    + " for subscriptionRequest=" + subscriptionRequest + ".", e);
+        }
 
         if (!response.isSuccess()) {
             throw new RuntimeException("Subscription creation failed: " +
@@ -360,12 +405,22 @@ public class SubscriptionService {
         return response.getData().orElseThrow();
     }
 
-    public CancelSubscriptionData cancelSubscription(String subscriptionRequest) {
+    public CancelSubscriptionData cancelSubscription(String subscriptionId) {
+        // Java SDK cancels by Waffo subscriptionId (from the create response), NOT subscriptionRequest.
         CancelSubscriptionParams params = CancelSubscriptionParams.builder()
-                .subscriptionRequest(subscriptionRequest)
+                .subscriptionId(subscriptionId)
                 .build();
 
-        ApiResponse<CancelSubscriptionData> response = waffo.subscription().cancel(params);
+        ApiResponse<CancelSubscriptionData> response;
+        try {
+            response = waffo.subscription().cancel(params);
+        } catch (WaffoUnknownStatusException e) {
+            // Unknown network status — reconcile via inquiry on the SAME subscriptionId (Rule: cancel -> inquiry).
+            InquirySubscriptionData reconciled = waffo.subscription().inquiry(
+                    InquirySubscriptionParams.builder().subscriptionId(subscriptionId).build()).getData().orElse(null);
+            throw new IllegalStateException("Subscription cancel returned unknown status; reconciled=" + reconciled
+                    + " for subscriptionId=" + subscriptionId + ".", e);
+        }
 
         if (!response.isSuccess()) {
             throw new RuntimeException("Subscription cancel failed: " +
@@ -512,6 +567,7 @@ import com.waffo.types.config.Environment;
 import com.waffo.types.config.WaffoConfig;
 import com.waffo.types.iso.CurrencyCode;
 import com.waffo.types.order.*;
+import com.waffo.exception.WaffoUnknownStatusException;
 import com.waffo.types.payment.ProductName;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -543,7 +599,7 @@ class WaffoIntegrationTest {
     }
 
     @Test
-    void testCreateOrder() {
+    void testCreateOrder() throws WaffoUnknownStatusException {
         String paymentRequestId = genRequestId();
 
         CreateOrderParams params = CreateOrderParams.builder()
@@ -551,13 +607,17 @@ class WaffoIntegrationTest {
                 .merchantOrderId("test-" + System.currentTimeMillis())
                 .orderCurrency(CurrencyCode.USD)
                 .orderAmount("1.00")
-                .orderDescription("Integration test order")
+                .orderDescription("Demo order - SDK connectivity check")
                 .notifyUrl("https://example.com/webhook")
                 .successRedirectUrl("https://example.com/success")
                 .userInfo(UserInfo.builder()
-                        .userId("test-user")
-                        .userEmail("test@example.com")
+                        .userId("demo-user-001")
+                        .userEmail("demo-user-001@example.com")
                         .userTerminal(UserTerminalType.WEB)
+                        .build())
+                .goodsInfo(GoodsInfo.builder()
+                        .goodsName("Demo Goods")
+                        .goodsUrl("https://www.example.com/products/demo")
                         .build())
                 .paymentInfo(PaymentInfo.builder()
                         .productName(ProductName.ONE_TIME_PAYMENT)
@@ -577,7 +637,7 @@ class WaffoIntegrationTest {
     }
 
     @Test
-    void testQueryOrder() {
+    void testQueryOrder() throws WaffoUnknownStatusException {
         String paymentRequestId = genRequestId();
 
         // Create first
@@ -586,10 +646,11 @@ class WaffoIntegrationTest {
                 .merchantOrderId("test-" + System.currentTimeMillis())
                 .orderCurrency(CurrencyCode.USD)
                 .orderAmount("1.00")
-                .orderDescription("Test")
+                .orderDescription("Demo order - inquiry flow")
                 .notifyUrl("https://example.com/webhook")
                 .successRedirectUrl("https://example.com/success")
-                .userInfo(UserInfo.builder().userId("test-user").userEmail("test@example.com").userTerminal(UserTerminalType.WEB).build())
+                .userInfo(UserInfo.builder().userId("demo-user-001").userEmail("demo-user-001@example.com").userTerminal(UserTerminalType.WEB).build())
+                .goodsInfo(GoodsInfo.builder().goodsName("Demo Goods").goodsUrl("https://www.example.com/products/demo").build())
                 .paymentInfo(PaymentInfo.builder().productName(ProductName.ONE_TIME_PAYMENT).build())
                 .build());
 

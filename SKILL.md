@@ -223,7 +223,7 @@ SDK installation must use the current package version:
 
 If dependency install requires network and fails because of sandboxing, request approval and retry instead of guessing a stale version.
 
-If context is low, hand off with: `Step 7 requires a new session. Run 集成测试 or run integration tests to continue.`
+If context is low, hand off with: `Step 6 (Integration Verification) requires a new session. Run 集成测试 or run integration tests to continue.`
 
 ## Step 6: Integration Verification
 

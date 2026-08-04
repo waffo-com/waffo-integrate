@@ -50,7 +50,7 @@ Copy `SKILL.md`, `references/`, `docs/`, and `bin/waffo-verify.js` into the same
 
 ## What it does
 
-A guided integration flow with Step 7 verification:
+A guided integration flow with Step 6 verification:
 
 1. **Detects language** — Node.js / Java / Go / Python (auto-detect or ask)
 2. **Checks project status** — existing project or new scaffold
@@ -74,9 +74,9 @@ Built-in protocol and contract rules prevent common integration mistakes:
 - Refund currency must match original order currency
 - Currency parameterization for multi-currency projects
 
-### Integration verification (Step 7)
+### Integration verification (Step 6)
 
-Phased Step 7 execution with automatic fix-and-retry:
+Phased Step 6 execution with automatic fix-and-retry:
 
 - **Phase A** — 核心测试：`order-create`、`order-create-error`、`payment-success`、`payment-failure`、`webhook-idempotency`
 - **Phase B1/B2** — Pay method coverage: card + non-card (minimum test set from API discovery)
@@ -109,7 +109,7 @@ waffo-integrate/
 │   ├── java.md                           # Java/Spring Boot templates
 │   ├── go.md                             # Go templates
 │   ├── python.md                         # Python (FastAPI/Flask/Django) templates
-│   ├── integration-verification.md       # Step 7 verification protocol
+│   ├── integration-verification.md       # Step 6 verification protocol
 │   ├── acceptance-criteria.md            # Test cards, Playwright scripts, report template
 │   ├── sandbox-knowledge.md              # Sandbox quirks (K024-K030)
 │   ├── business-validation.md            # Integration Quality Radar + passive verification

@@ -1,12 +1,14 @@
 {
   "name": "@waffo/waffo-integrate",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Claude Code / Cursor skill for integrating Waffo Payment SDK (Node.js / Java / Go / Python)",
   "bin": {
     "waffo-integrate": "./bin/install.js"
   },
   "scripts": {
-    "test": "node tests/waffo-verify.test.js"
+    "test": "node tests/waffo-verify.test.js && node tests/compile-templates.mjs",
+    "test:unit": "node tests/waffo-verify.test.js",
+    "test:templates": "node tests/compile-templates.mjs"
   },
   "files": [
     "bin/",

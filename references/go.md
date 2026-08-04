@@ -77,9 +77,14 @@ type CreatePaymentInput struct {
 	Description        string
 	NotifyURL          string
 	SuccessRedirectURL string
+	FailedRedirectURL  string // Rule 19: all three redirect URLs are required
+	CancelRedirectURL  string
 	UserID             string
 	UserEmail          string
-	UserTerminal       string // WEB | APP | WAP | SYSTEM (default: WEB)
+	UserTerminal       string // WEB | APP (default: WEB)
+	GoodsID            string
+	GoodsName          string // Rule 21: always required (risk control / compliance)
+	GoodsURL           string // product detail page or official site URL - NOT an image; App-only merchants use AppName instead
 	PayMethodType      string // optional: "CREDITCARD", "EWALLET"
 	PayMethodName      string // optional: "CC_VISA", "DANA"
 }
@@ -105,6 +110,13 @@ func CreatePayment(ctx context.Context, input CreatePaymentInput) (*order.Create
 		OrderDescription:   input.Description,
 		NotifyURL:          input.NotifyURL,
 		SuccessRedirectURL: input.SuccessRedirectURL,
+		FailedRedirectURL:  input.FailedRedirectURL,
+		CancelRedirectURL:  input.CancelRedirectURL,
+		GoodsInfo: &order.GoodsInfo{
+			GoodsID:   input.GoodsID,
+			GoodsName: input.GoodsName, // Rule 21: goodsName always required
+			GoodsURL:  input.GoodsURL,  // or AppName for App-only merchants
+		},
 		UserInfo: &order.UserInfo{
 			UserID:       input.UserID,
 			UserEmail:    input.UserEmail,
@@ -252,9 +264,12 @@ type CreateSubscriptionInput struct {
 	Description            string
 	NotifyURL              string
 	SuccessRedirectURL     string
+	FailedRedirectURL      string
+	CancelRedirectURL      string
+	SubscriptionManagementURL string // Rule 26: required; the page must require login
 	UserID                 string
 	UserEmail              string
-	UserTerminal           string // WEB | APP | WAP | SYSTEM (default: WEB)
+	UserTerminal           string // WEB | APP (default: WEB)
 	PeriodType             string // DAILY, WEEKLY, MONTHLY
 	PeriodInterval         string
 	GoodsID                string
@@ -281,8 +296,11 @@ func CreateSubscription(ctx context.Context, input CreateSubscriptionInput) (*su
 		MerchantSubscriptionID: input.MerchantSubscriptionID,
 		Currency:               input.Currency,
 		Amount:                 input.Amount,
-		NotifyURL:              input.NotifyURL,
-		SuccessRedirectURL:     input.SuccessRedirectURL,
+		NotifyURL:                 input.NotifyURL,
+		SuccessRedirectURL:        input.SuccessRedirectURL,
+		FailedRedirectURL:         input.FailedRedirectURL,
+		CancelRedirectURL:         input.CancelRedirectURL,
+		SubscriptionManagementURL: input.SubscriptionManagementURL,
 		ProductInfo: &subscription.ProductInfo{
 			Description:    input.Description,
 			PeriodType:     input.PeriodType,
@@ -686,13 +704,17 @@ func TestCreateOrder(t *testing.T) {
 		MerchantOrderID:    "test-go-" + uuid.New().String()[:8],
 		OrderCurrency:      "USD",
 		OrderAmount:        "1.00",
-		OrderDescription:   "Go integration test order",
+		OrderDescription:   "Demo order - SDK connectivity check",
 		NotifyURL:          "https://example.com/webhook",
 		SuccessRedirectURL: "https://example.com/success",
 		UserInfo: &order.UserInfo{
-			UserID:       "test-user",
-			UserEmail:    "test@example.com",
+			UserID:       "demo-user-001",
+			UserEmail:    "demo-user-001@example.com",
 			UserTerminal: "WEB",
+		},
+		GoodsInfo: &order.GoodsInfo{
+			GoodsName: "Demo Goods",
+			GoodsURL:  "https://www.example.com/products/demo",
 		},
 		PaymentInfo: &order.PaymentInfo{
 			ProductName: "ONE_TIME_PAYMENT",
@@ -730,10 +752,11 @@ func TestQueryOrder(t *testing.T) {
 		MerchantOrderID:    "test-go-" + uuid.New().String()[:8],
 		OrderCurrency:      "USD",
 		OrderAmount:        "1.00",
-		OrderDescription:   "Test",
+		OrderDescription:   "Demo order - inquiry flow",
 		NotifyURL:          "https://example.com/webhook",
 		SuccessRedirectURL: "https://example.com/success",
-		UserInfo:           &order.UserInfo{UserID: "test-user", UserEmail: "test@example.com", UserTerminal: "WEB"},
+		UserInfo:           &order.UserInfo{UserID: "demo-user-001", UserEmail: "demo-user-001@example.com", UserTerminal: "WEB"},
+		GoodsInfo:          &order.GoodsInfo{GoodsName: "Demo Goods", GoodsURL: "https://www.example.com/products/demo"},
 		PaymentInfo:        &order.PaymentInfo{ProductName: "ONE_TIME_PAYMENT"},
 	}, nil)
 	if err != nil {
