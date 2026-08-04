@@ -1,12 +1,13 @@
 name: CI
 
-# Runs the unit tests and the template compile harness on every push / PR. The harness
-# compiles each language's templates in references/*.md against the pinned Waffo SDKs, so
-# any drift (phantom fields, wrong methods, unhandled checked exceptions, missing required
-# fields) fails the build — the class of defect that shipped undetected before this existed.
+# Runs the unit tests and the template compile harness on every PR and on pushes to main.
+# The harness compiles each language's templates in references/*.md against the pinned Waffo
+# SDKs, so any drift (phantom fields, wrong methods, unhandled checked exceptions, missing
+# required fields) fails the build — the class of defect that shipped undetected before this existed.
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
