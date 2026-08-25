@@ -87,6 +87,7 @@ Key verification safeguards:
 
 - `payMethodConfig().inquiry()` is mandatory before pay-method coverage or formal reporting
 - final report generation is fail-closed behind a report hard gate
+- schemaVersion 2 manifests render the report via `waffo-verify . --emit report`; the Claude hook byte-compares the written file against that output and refuses hand edits
 - `Verification Blocked Summary` is used instead of a formal report when required phases or evidence are missing
 - `Webhook Delivery Evidence` distinguishes project-side evidence from Waffo-side evidence
 - `Integration Quality Radar` 将被动代码审查风险表达成客户可读的检查项、发现、风险级别和建议

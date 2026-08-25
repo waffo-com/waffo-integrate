@@ -275,6 +275,10 @@ Do not print the formal report body and do not save `integration-report-{YYYYMMD
 
 Output a Waffo-team-facing Markdown report only when the final outcome is `FULL` or `CONDITIONAL`. The report reflects integration completeness and evidence. It is not a command transcript.
 
+**schemaVersion 2：报告由 validator 渲染，不手写。** 运行 `node <skill-dir>/bin/waffo-verify.js . --emit report` 并把输出原样保存。下面的模板是渲染结果的形状参考，用来读懂每个段落，不是让你照着敲的填空题。固定标签、列集合、状态词和签约方式清单都住在 `bin/waffo-verify.js` 里，manifest 只提供证据文本。
+
+以下改动一律不允许，Claude hook 的字节比对会阻断：删除任何一列（尤其 `Non-PASS Items` 的四个标识列）、自创状态词（例如 `PASS*`、`PARTIAL→PASS*`）、把多个支付方式并进同一行、删减 `Parameter Check` 或 `Data Integrity Check` 的条目。需要补充信息就填 manifest 的 `report.notes`，它会渲染成 Overview 下方的引用段。
+
 ```markdown
 # Integration Acceptance Report / 集成验收报告
 
@@ -287,7 +291,7 @@ Output a Waffo-team-facing Markdown report only when the final outcome is `FULL`
 | Project | {project name} |
 | Date | {date} |
 | SDK Version | {version} |
-| Skill Version | {package.json version} |
+| Skill Version | {running skill version — must equal manifest `skillVersion` and the version printed by waffo-verify; a mismatch blocks the report} |
 | Environment | Sandbox |
 | MID | {merchant ID} |
 | Coverage Basis | {minimum test set / expanded contracted coverage / business-defined scope} |

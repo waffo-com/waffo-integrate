@@ -14,13 +14,79 @@ T2/T3 负责可机械验证的事实：feature 范围、必需 handler 注册、
 
 在商户项目中维护该文件。它是 validator 的输入，不是 AI 的自由格式完成声明。validator 会从 `features` 重新推导必需 decision、handler 和 test，空数组不能缩小检查范围。
 
+`skillVersion` 必须**逐字符等于本次实际执行的那份 skill 的 `package.json` 版本**。validator 自己读 `<skill-dir>/package.json` 做严格比对，不一致直接报 ERROR 并阻断报告——这个字段不是自由填写的记录项，而是把验收结论锚定到具体版本的依据。不知道该填什么就先跑一次 `node <skill-dir>/bin/waffo-verify.js .`，输出表头会打印真实版本。skill 升级后必须同步更新本字段和报告 Overview 的 `Skill Version` 行。
+
+## schemaVersion 1 与 2
+
+- **1**：现有结构。走全部闸门校验，但不能渲染报告，报告仍由 AI 手写。存量项目不受影响。
+- **2**：在 1 之上新增渲染所需字段（下面的 `report` 块、`tests[].details`、`payMethodCoverage[].country`/`.type`、`qualityFindings[]` 的四个文本字段）。只有 2 能执行 `--emit report`，也只有 2 会被 Claude hook 做字节比对。
+
+新集成一律用 2。v2 额外字段在报告闸门阶段校验，集成中途跑 `waffo-verify .` 不受影响。
+
+## 渲染与字节比对
+
+```bash
+node <skill-dir>/bin/waffo-verify.js . --emit report
+```
+
+闸门不通过时连 stdout 都不产出（渲染出来的文本会被复制粘贴，等同于交付）。通过时输出整份报告，逐字节写入 `integration-report-{YYYYMMDD}.md` 即可。文件名里的日期必须与 `report.date` 一致。
+
+Claude hook 对 schemaVersion 2 的项目额外执行两件事：写入内容与 `--emit report` 输出逐字节比对，不一致阻断并指出第一处差异行；对已渲染报告的 `Edit` 一律拒绝，要求改 manifest 后重新渲染。这封死了「闸门校验 JSON、交付物却是手抄 Markdown」这个此前完全无约束的环节。
+
 下面展示字段结构；数组内容必须按后续规则完整填写：
 
 ```json
 {
-  "schemaVersion": 1,
-  "skillVersion": "1.5.0",
+  "schemaVersion": 2,
+  "skillVersion": "<running skill version>",
   "features": ["order"],
+  "report": {
+    "project": "demo-shop",
+    "date": "2026-08-24",
+    "sdkVersion": "@waffo/waffo-node 2.0.0",
+    "environment": "Sandbox",
+    "mid": "1300000481",
+    "coverageBasis": "minimum test set",
+    "features": "Order Payment, Webhook",
+    "integrationConfiguration": {
+      "userTerminal": "WEB",
+      "checkoutSelection": "Waffo hosted checkout",
+      "currencyMode": "single-currency: USD",
+      "subscriptionMode": "N/A",
+      "subscriptionRetryPolicy": "N/A",
+      "subscriptionEvents": "N/A"
+    },
+    "projectSurface": {
+      "orderEndpoints": "POST /api/orders",
+      "refundEndpoints": "N/A",
+      "subscriptionEndpoints": "N/A",
+      "configEndpoints": "GET /api/config/pay-methods",
+      "webhookEndpoint": "POST /api/webhooks/waffo (raw body, SDK signature verification)",
+      "webhookBusinessLogic": "fulfil once per paymentRequestId",
+      "persistence": "orders.payment_request_id / orders.acquiring_order_id",
+      "credentials": "env vars, sanitized",
+      "appTerminal": "N/A"
+    },
+    "webhookDelivery": [
+      { "status": "PROJECT_SIDE_VERIFIED", "detail": "same notification replayed twice, business ran once", "nextStep": "-" }
+    ],
+    "apisExercised": [
+      { "capability": "Payment create", "operation": "order().create()", "evidence": "payreq-20260803-0001" }
+    ],
+    "parameterCheck": { "orderDescription": "...", "goodsName": "...", "goodsUrlOrAppName": "...", "noAppCase": "...", "goodsUrl": "...", "appName": "N/A - not an App merchant", "userEmail": "...", "userTerminal": "...", "timeFields": "...", "nonCardFields": "..." },
+    "dataIntegrity": { "idempotencyKeyPersisted": "...", "acquiringOrderIdStored": "...", "refundRequestIdPersisted": "...", "subscriptionIdsStored": "...", "redirectUrls": "..." },
+    "appTerminalAssessment": { "hasApp": "No", "checkoutLoadingMode": "N/A", "userTerminalApp": "N/A", "deviceWalletMethods": "N/A" },
+    "goLive": {
+      "q1": { "status": "OK", "detail": "connect/read 10s" },
+      "q2": { "status": "OK", "detail": "JVM default 30s" },
+      "q3": { "status": "OK", "detail": "deployed in SGP" },
+      "q4": { "status": "N/A", "detail": "WeChat Pay not contracted" },
+      "q5": { "status": "OK", "detail": "no iframe, full-page redirect" }
+    },
+    "notes": "Anything the fixed sections cannot carry — verification topology, stubbed upstreams, environment caveats.",
+    "fixes": [{ "testId": "order-create-error", "rootCause": "...", "fixSummary": "..." }],
+    "remediation": ["Deploy the build containing the order-create-error fix before go-live."]
+  },
   "decisions": [
     {
       "id": "paymentSourceOfTruth",
@@ -58,7 +124,8 @@ T2/T3 负责可机械验证的事实：feature 范围、必需 handler 注册、
         "paymentRequestId": "payreq-20260803-0001",
         "acquiringOrderId": "acq-20260803-0001"
       },
-      "evidenceIds": ["ev-phase-a-log"]
+      "evidenceIds": ["ev-phase-a-log"],
+      "details": "returned a checkout URL; local order CREATED"
     }
   ],
   "payMethodInquiry": {
@@ -69,6 +136,8 @@ T2/T3 负责可机械验证的事实：feature 范围、必需 handler 注册、
   "payMethodCoverage": [
     {
       "methodId": "CARD",
+      "country": "USA",
+      "type": "CREDITCARD",
       "status": "PASS",
       "identifiers": {
         "paymentRequestId": "payreq-20260803-0001",
@@ -78,7 +147,15 @@ T2/T3 负责可机械验证的事实：feature 范围、必需 handler 注册、
     }
   ],
   "qualityFindings": [
-    { "id": "webhookSignatureVerification", "riskLevel": "PASS", "evidenceIds": ["ev-quality"] }
+    {
+      "id": "webhookSignatureVerification",
+      "riskLevel": "PASS",
+      "evidenceIds": ["ev-quality"],
+      "reviewAnchor": "src/webhooks/waffo.js",
+      "finding": "SDK verifies the signature before any business logic runs",
+      "recommendation": "keep the signature-first path",
+      "evidence": "src/webhooks/waffo.js:18"
+    }
   ],
   "blockers": [],
   "mustFix": [],
