@@ -1,5 +1,24 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **Report renderer** (`waffo-verify . --emit report`) — the acceptance report is now a deterministic projection of an already-validated `.waffo/integration-manifest.json` instead of a hand-typed re-rendering of the same data. Fixed labels, column sets, status vocabulary, the `Parameter Check`/`Data Integrity Check` item lists and the contracted-method list live in `bin/waffo-verify.js`; the manifest supplies evidence text only. Rendering is gated exactly like saving is — a blocked gate produces no stdout at all, since rendered text is a copy-paste source. `Skill Compliance Review` is now computed from what the gate proved rather than self-declared.
+- **`schemaVersion` 2** — carries what rendering needs: a `report` block (project/date/SDK version/environment/MID/coverage basis, integration configuration, project surface, webhook delivery, APIs exercised, parameter and data-integrity details, APP terminal, Go-Live answers, `notes`, fixes, remediation), `tests[].details`, `payMethodCoverage[].country`/`.type`, and the four text fields on `qualityFindings[]`. Validated at the report gate rather than in the advisory scan, so a mid-integration `waffo-verify .` stays usable. **`schemaVersion` 1 keeps its existing gate-only behaviour** — in-flight integrations are never blocked by a renderer they have not migrated to.
+- **Hook byte-compare gate** — for `schemaVersion` 2 projects the Claude hook compares the written report against `--emit report` byte for byte, reports the first differing line on mismatch, refuses `Edit` of a rendered report outright, and rejects a file name whose date contradicts `report.date`.
+- **`report.notes`** — a first-class home for verification topology, stubbed upstreams and environment caveats, rendered as a quote block under Overview. Previously this content had nowhere to go and was appended ad hoc.
+- Evals 31–35: reproduce the conditions that produced each observed drift — being asked to compose the report by hand, to write an invented `PASS*` status, to drop the `Non-PASS Items` identifier columns, to merge pay methods into shared rows, and to soften a mechanical compliance criterion into a self-declaration.
+
+### Changed
+
+- **`skillVersion` is verified, not self-declared.** The validator reads its own `package.json` (`bin/` lives inside the skill package, so this is necessarily the running release) and compares strictly with `manifest.skillVersion`; a mismatch is an ERROR and therefore blocks the report gate. The gate pass message and the scan header now name the running version so integrators know what to fill in. Previously the field was only checked for non-emptiness, which made the `Skill Version` row in every report unverifiable.
+- `SKILL.md`, `references/acceptance-criteria.md`, `docs/enforcement.md` and `README.md` state the rendering contract explicitly: on `schemaVersion` 2 the report is emitted, not written; dropping columns, inventing status words, merging pay-method rows and trimming the fixed checklists are all rejected. The manifest example is upgraded to `schemaVersion` 2.
+
+### Fixed
+
+- Closed the gap between "the gate validated the data" and "the delivered report reflects it". An audit of a real merchant report found eight drifts in the hand-typed Markdown, three of which the manifest layer already prevented: an invented `PASS*` status (rejected by the `tests[].status` whitelist), a `Non-PASS Items` table stripped of all four identifier columns (required per `TEST_IDENTIFIER_REQUIREMENTS`), and 50 contracted methods merged into 39 rows with one method name disappearing entirely (`payMethodCoverage` requires a row per active method). Six of the eight are now structurally impossible; extra test rows beyond the required set remain allowed, since covering more official cases is not drift.
+
 ## [1.5.1] - 2026-08-04
 
 ### Fixed
