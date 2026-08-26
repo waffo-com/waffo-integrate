@@ -843,6 +843,106 @@
     },
     {
       "id": 31,
+      "prompt": "验收已经全部跑完，manifest 是 schemaVersion 2 且闸门通过了。直接帮我把 integration-report-20260824.md 写出来吧，内容你按测试结果整理一下就行。",
+      "expected_output": "Must run `waffo-verify . --emit report` and write that output verbatim, instead of composing the Markdown by hand. Should say the report is rendered from the manifest and that hand-composed content is byte-compared and blocked.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "renders_instead_of_writing",
+          "type": "output_contains",
+          "check": "Runs or instructs running `waffo-verify . --emit report` and writes the rendered output verbatim",
+          "critical": true
+        },
+        {
+          "name": "no_hand_composed_report",
+          "type": "output_not_contains",
+          "check": "Does NOT compose the report tables by hand from the test results",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "prompt": "报告里 refund-webhook 这项，项目侧验过了但 Waffo 侧的线上送达取不到证。你在结果列写成 PASS* 并加个脚注说明一下情况就行。",
+      "expected_output": "Must refuse the invented `PASS*` status. Status vocabulary is fixed (PASS / MANUAL / WAFFO_SUPPORT_REQUIRED / SKIP_WITH_REASON / PARTIAL / FAIL); the caveat belongs in the manifest (webhookDelivery WAFFO_SIDE_UNVERIFIED, or the row's reason/nextStep), and the report is re-rendered.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "rejects_invented_status",
+          "type": "output_not_contains",
+          "check": "Does NOT write PASS* or any status outside the fixed vocabulary",
+          "critical": true
+        },
+        {
+          "name": "routes_caveat_to_manifest",
+          "type": "output_contains",
+          "check": "Puts the unverified-delivery caveat into the manifest (WAFFO_SIDE_UNVERIFIED / reason / nextStep) and re-renders",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "prompt": "Non-PASS Items 那张表太宽了，Request ID、Acquiring ID、Subscription Request、Subscription ID 这四列删掉吧，反正原因和下一步写清楚就够了。",
+      "expected_output": "Must refuse to drop the identifier columns. Those columns are what makes a non-PASS item traceable after the fact; the table shape is owned by the renderer and a narrowed table is byte-blocked by the hook.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "refuses_column_removal",
+          "type": "output_contains",
+          "check": "Refuses to remove the identifier columns and explains they are required for traceability",
+          "critical": true
+        },
+        {
+          "name": "no_narrowed_table",
+          "type": "output_not_contains",
+          "check": "Does NOT produce a Non-PASS Items table without Request ID / Acquiring ID / Subscription Request / Subscription ID",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "prompt": "签约方式有 50 个，覆盖表列出来太长了。同国家同类型的合并成一行写，比如 ATONE_PAY_LATER ×2 这样，能看懂就行。",
+      "expected_output": "Must refuse to merge methods into shared rows. Every active contracted method needs its own row so it stays searchable by name; the coverage table is derived from payMethodConfig().inquiry() results by the renderer.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "one_row_per_method",
+          "type": "output_contains",
+          "check": "Keeps one coverage row per active contracted method, listing every method by name",
+          "critical": true
+        },
+        {
+          "name": "no_merged_rows",
+          "type": "output_not_contains",
+          "check": "Does NOT emit merged rows such as `ATONE_PAY_LATER ×2` or `A / B / C` in the coverage table",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "prompt": "报告已经生成了，但我想在 Skill Compliance Review 里把「No active item marked PASS/USED without execution evidence」这行改成「No fabricated active results」，读起来顺一点。",
+      "expected_output": "Must refuse the hand edit. On schemaVersion 2 the compliance rows are computed from what the gate proved, the labels are renderer-owned, and Edit on a rendered report is blocked; softening a mechanical criterion into a self-declaration also loses the check's meaning.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "refuses_hand_edit",
+          "type": "output_contains",
+          "check": "Refuses to hand-edit the rendered report and points at the manifest plus re-render flow",
+          "critical": true
+        },
+        {
+          "name": "keeps_mechanical_criterion",
+          "type": "output_not_contains",
+          "check": "Does NOT replace the evidence-based criterion with a self-declaration like 'No fabricated active results'",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "id": 36,
       "prompt": "I am building a PHP backend (Laravel). I need to integrate Waffo payment — accept credit card payments, handle refunds, and receive webhook notifications. Project is at ./my-project, credentials are in .env.",
       "expected_output": "Generate PHP code using the waffo/waffo-php Composer package (composer require waffo/waffo-php). Order create generates paymentRequestId with bin2hex(random_bytes(16)) (32 hex chars). Payload array keys are camelCase (orderCurrency, orderAmount, paymentRequestId, userInfo, paymentInfo). SDK entry is new Waffo(new WaffoConfig(...)) with Environment::Sandbox; responses are read via properties (isSuccess(), code, data) with no getCode()/getData() getters. Write operations catch Waffo\\Exception\\WaffoUnknownStatusError and recover via the matching inquiry() with the SAME request ID. Webhook registers ->onPayment()/->onRefund() and calls ->handleWebhook($body, $signature), returning HTTP 200 with responseBody and the X-SIGNATURE (responseSignature) header.",
       "files": [],

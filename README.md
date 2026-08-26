@@ -87,6 +87,7 @@ Key verification safeguards:
 
 - `payMethodConfig().inquiry()` is mandatory before pay-method coverage or formal reporting
 - final report generation is fail-closed behind a report hard gate
+- schemaVersion 2 manifests render the report via `waffo-verify . --emit report`; the Claude hook byte-compares the written file against that output and refuses hand edits
 - `Verification Blocked Summary` is used instead of a formal report when required phases or evidence are missing
 - `Webhook Delivery Evidence` distinguishes project-side evidence from Waffo-side evidence
 - `Integration Quality Radar` 将被动代码审查风险表达成客户可读的检查项、发现、风险级别和建议
@@ -120,7 +121,7 @@ waffo-integrate/
 │   ├── INDEX.md                          # Knowledge base index + remote fallback
 │   └── enforcement.md                    # Manifest schema + hook configuration
 ├── evals/
-│   └── evals.json                        # 31 prompt evals, 107 assertions
+│   └── evals.json                        # 36 prompt evals, 117 assertions
 └── tests/
     ├── waffo-verify.test.js              # Executable validator/hook regression tests
     ├── compile-templates.mjs             # Five-language template gate
@@ -129,7 +130,7 @@ waffo-integrate/
 
 ## Evaluation coverage
 
-The repo currently defines 31 prompt eval scenarios and 107 assertions, plus executable validator/hook regression tests:
+The repo currently defines 36 prompt eval scenarios and 117 assertions, plus executable validator/hook regression tests:
 
 | Eval | Scenario | Assertions | Result |
 |------|----------|-----------|--------|
@@ -163,7 +164,12 @@ The repo currently defines 31 prompt eval scenarios and 107 assertions, plus exe
 | 28 | Require goodsInfo and all order redirect URLs | 3 | Defined |
 | 29 | Keep Java subscription templates SDK-compatible | 3 | Defined |
 | 30 | Keep subscription description in productInfo | 2 | Defined |
-| 31 | PHP Laravel payment + refund + webhook | 7 | Defined |
+| 31 | Block hand-composed report on schemaVersion 2 | 2 | Defined |
+| 32 | Reject invented PASS* status | 2 | Defined |
+| 33 | Keep Non-PASS identifier columns | 2 | Defined |
+| 34 | Keep one row per contracted pay method | 2 | Defined |
+| 35 | Reject softened compliance self-declaration | 2 | Defined |
+| 36 | PHP Laravel payment + refund + webhook | 7 | Defined |
 
 ## Requirements
 

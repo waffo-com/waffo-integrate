@@ -275,6 +275,10 @@ The final report is for the Waffo technical team and should reflect integration 
 
 写客户可读中文或双语报告时，读取 `references/glossary.md` 并保持术语一致。API paths、SDK methods、field names、enum values、event names 保留原文。
 
+**schemaVersion 2 的 manifest 不手写报告。** 执行 `node <skill-dir>/bin/waffo-verify.js . --emit report`，把输出逐字节原样写入 `integration-report-{YYYYMMDD}.md`。要改报告内容就去改 manifest 再重新渲染；Claude hook 会把写入内容与渲染结果逐字节比对，不一致直接阻断，对已渲染报告的 Edit 一律拒绝。列名、状态词、签约方式清单都由渲染器推导，不接受手工调整——删列、自创状态词（例如 `PASS*`）、把多个支付方式并成一行都会被拦下。
+
+schemaVersion 1 的 manifest 仍走原有流程（手写 + 闸门），但不再是推荐路径。
+
 Use the template in `references/acceptance-criteria.md`. Required report sections:
 
 - Overview and Integration Configuration.
