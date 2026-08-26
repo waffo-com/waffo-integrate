@@ -16,6 +16,7 @@ export const FENCE = {
   node: 'typescript',
   go: 'go',
   python: 'python',
+  php: 'php',
 };
 
 /**
@@ -37,9 +38,9 @@ export function extractBlocks(mdPath, fence) {
   return out;
 }
 
-// Matches a leading `// <path>` (JS/TS/Go/Java) or `# <path>` (Python) comment that
+// Matches a leading `// <path>` (JS/TS/Go/Java/PHP) or `# <path>` (Python) comment that
 // names a source file. Only the FIRST non-empty line is considered a path marker.
-const PATH_RE = /^\s*(?:\/\/|#)\s*([\w./-]+\.(?:ts|js|go|java|py))\s*$/;
+const PATH_RE = /^\s*(?:\/\/|#)\s*([\w./-]+\.(?:ts|js|go|java|py|php))\s*$/;
 
 function firstLine(code) {
   for (const line of code.split('\n')) {

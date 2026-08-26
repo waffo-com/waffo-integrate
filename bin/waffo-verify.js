@@ -21,12 +21,28 @@ const FEATURE_REQUIRED_HANDLERS = {
   subscriptionChange: ['onSubscriptionChange'],
 };
 
+// Member access spans languages: `.` (JS/TS/Go/Java/Python), `->` (PHP), `::` (static
+// calls). Keeping the operator generic means a new SDK language whose handler names follow
+// one of the three spellings below needs no validator change — see docs/adding-a-language.md.
+const MEMBER_ACCESS = '(?:\\.|->|::)';
+
+// A handler may be spelled camelCase (JS/TS/Java/PHP), snake_case (Python/Ruby), or
+// PascalCase (Go exported methods). Derive all three from the canonical camelCase name so
+// the spellings can never drift out of sync across handlers.
+function registrationPatterns(camelName) {
+  const snake = camelName.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase());
+  const pascal = camelName[0].toUpperCase() + camelName.slice(1);
+  return [...new Set([camelName, snake, pascal])].map(
+    (spelling) => new RegExp(MEMBER_ACCESS + '\\s*' + spelling + '\\s*\\('),
+  );
+}
+
 const HANDLER_REGISTRATION_PATTERNS = {
-  onPayment: [/\.\s*onPayment\s*\(/, /\.\s*on_payment\s*\(/, /\.\s*OnPayment\s*\(/],
-  onRefund: [/\.\s*onRefund\s*\(/, /\.\s*on_refund\s*\(/, /\.\s*OnRefund\s*\(/],
-  onSubscriptionStatus: [/\.\s*onSubscriptionStatus\s*\(/, /\.\s*on_subscription_status\s*\(/, /\.\s*OnSubscriptionStatus\s*\(/],
-  onSubscriptionPeriodChanged: [/\.\s*onSubscriptionPeriodChanged\s*\(/, /\.\s*on_subscription_period_changed\s*\(/, /\.\s*OnSubscriptionPeriodChanged\s*\(/],
-  onSubscriptionChange: [/\.\s*onSubscriptionChange\s*\(/, /\.\s*on_subscription_change\s*\(/, /\.\s*OnSubscriptionChange\s*\(/],
+  onPayment: registrationPatterns('onPayment'),
+  onRefund: registrationPatterns('onRefund'),
+  onSubscriptionStatus: registrationPatterns('onSubscriptionStatus'),
+  onSubscriptionPeriodChanged: registrationPatterns('onSubscriptionPeriodChanged'),
+  onSubscriptionChange: registrationPatterns('onSubscriptionChange'),
 };
 
 const FEATURE_CODE_SIGNATURES = {

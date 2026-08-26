@@ -392,6 +392,16 @@ Only `FULL` and `CONDITIONAL` outcomes are allowed to produce the formal Waffo-f
 3. **Credentials**: Verify Sandbox credentials are available
 4. **Auth token**: If the project's order endpoint requires authentication, obtain a valid token (e.g., login via API, or ask the developer)
 
+### Webhook delivery — verification discipline (read before judging ANY webhook as "not delivered")
+
+Waffo delivers webhooks **asynchronously**, and delivery timing differs by event type. Do not conclude a webhook "was not delivered" without following all of these:
+
+1. **Timing is not uniform.** One-time `PAYMENT_NOTIFICATION` is near-real-time (seconds). `REFUND_NOTIFICATION` and all `SUBSCRIPTION_*` notifications can be delayed and are **retried with backoff** (observed: minutes to hours in Sandbox). A short wait (~2 min) is NOT evidence of non-delivery — poll for long enough, or verify via the sender side (below).
+2. **Keep the receiver alive.** Do not tear down the tunnel/server until verification is complete; a retried delivery that lands on a dead tunnel is lost and looks like "never sent".
+3. **Check the SENDER side before concluding.** Receiver-side absence alone is insufficient. Confirm what Waffo actually sent in Datadog (env:sandbox): the sending service is `acquiring-order-service` (`SignService.localSign` then `RestTemplateLogInterceptor.logRequest`). Query e.g. `env:sandbox @method_name:logRequest waffo/webhook <merchantId or order id>` — the log shows the target URI, `X-SIGNATURE`, and the exact body. If there is no send log, Waffo did not send it; if there is, the gap is on the receiver/timing side.
+4. **"Not received" is most often a missing notify URL, not a Waffo bug.** Refund needs its own `refundNotifyUrl` and subscription create/change need their own `notifyUrl` on the request — none fall back to the order's `notifyUrl`. Check the request first (see `code-generation-rules.md` Rule 33).
+5. **Offline handler verification (when live delivery is delayed/blocked).** Capture the real Waffo-signed body + `X-SIGNATURE` from the Datadog send log and **replay** it to the project webhook endpoint. The signature is computed over the body and is URL-independent, so a replay to `localhost` verifies signature-check + handler business logic with an authentic payload. Record this as `PROJECT_SIDE_VERIFIED`; mark `WAFFO_SIDE_VERIFIED` only when the Datadog send log confirms Waffo's own delivery.
+
 ---
 
 ## Acceptance Criteria

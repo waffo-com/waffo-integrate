@@ -258,13 +258,15 @@ public class RefundService {
         this.waffo = waffo;
     }
 
-    public RefundOrderData refundOrder(String acquiringOrderId,
-                                        String refundAmount, String refundReason) {
+    public RefundOrderData refundOrder(String acquiringOrderId, String refundAmount,
+                                        String refundNotifyUrl, String refundReason) {
         String refundRequestId = UUID.randomUUID().toString().replace("-", "");
         RefundOrderParams params = RefundOrderParams.builder()
                 .refundRequestId(refundRequestId)
                 .acquiringOrderId(acquiringOrderId)
                 .refundAmount(refundAmount)
+                // REQUIRED for REFUND_NOTIFICATION delivery — does NOT fall back to the order's notifyUrl.
+                .refundNotifyUrl(refundNotifyUrl)
                 .refundReason(refundReason)
                 .build();
 

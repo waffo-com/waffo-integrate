@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { extractBlocks, FENCE } from './extract.mjs';
 
-const LANGS = ['node', 'java', 'go', 'python'];
+const LANGS = ['node', 'java', 'go', 'python', 'php'];
 
 /** Load and index every language's blocks by path. */
 function loadBlocks(repoRoot) {
@@ -81,6 +81,12 @@ export function runStaticSpec(repoRoot) {
       fields: { goodsInfo: /["']goodsInfo["']\s*:/g, successRedirectUrl: /["']successRedirectUrl["']\s*:/g,
         failedRedirectUrl: /["']failedRedirectUrl["']\s*:/g, cancelRedirectUrl: /["']cancelRedirectUrl["']\s*:/g },
     },
+    php: {
+      paths: /(?:PaymentService|PaymentTest)\.php/,
+      create: /->order\(\)->create\(/g,
+      fields: { goodsInfo: /["']goodsInfo["']\s*=>/g, successRedirectUrl: /["']successRedirectUrl["']\s*=>/g,
+        failedRedirectUrl: /["']failedRedirectUrl["']\s*=>/g, cancelRedirectUrl: /["']cancelRedirectUrl["']\s*=>/g },
+    },
   };
   for (const lang of LANGS) {
     const p = orderPatterns[lang];
@@ -105,6 +111,7 @@ export function runStaticSpec(repoRoot) {
     java: { re: /SubscriptionService\.java/, mgmt: /subscriptionManagementUrl/ },
     go: { re: /subscription\.go/, mgmt: /SubscriptionManagementURL/ },
     python: { re: /subscription_service\.py/, mgmt: /subscriptionManagementUrl/ },
+    php: { re: /SubscriptionService\.php/, mgmt: /subscriptionManagementUrl/ },
   };
   for (const lang of LANGS) {
     const p = subPatterns[lang];
@@ -130,6 +137,28 @@ export function runStaticSpec(repoRoot) {
   assert('python: cancel_subscription returns one stable subscriptionStatus key',
     countMatches(pySub, /return \{["']subscriptionStatus["']/g) >= 2 &&
       !/return \{["']orderStatus["']/.test(pySub));
+
+  const phpSub = block(byLang, 'php', /SubscriptionService\.php/);
+  assert('php: cancelSubscription keyed by subscriptionId (not subscriptionRequest)',
+    /cancel\(\[["']subscriptionId/.test(phpSub) && !/cancel\(\[["']subscriptionRequest/.test(phpSub));
+  assert('php: cancelSubscription recovery inquiry runs through the isSuccess validator',
+    /subscription\(\)->inquiry\(\[["']subscriptionId/.test(phpSub) && /!\$response->isSuccess\(\)/.test(phpSub));
+
+  // --- refund must carry its own refund notify URL: REFUND_NOTIFICATION does NOT fall back to
+  // the order's notifyUrl, so omitting it means Waffo never sends the refund webhook (fails silently). ---
+  const refundBlocks = {
+    node: { re: /refund-service\.ts/, token: /refundNotifyUrl/ },
+    java: { re: /RefundService\.java/, token: /refundNotifyUrl/ },
+    go: { re: /refund\.go/, token: /NotifyURL/ },
+    python: { re: /refund_service\.py/, token: /refundNotifyUrl/ },
+    php: { re: /RefundService\.php/, token: /refundNotifyUrl/ },
+  };
+  for (const lang of LANGS) {
+    const rb = refundBlocks[lang];
+    const code = block(byLang, lang, rb.re);
+    assert(`${lang}: refund template sets a refund notify URL`, rb.token.test(code),
+      'REFUND_NOTIFICATION will not fire without a refund notify URL on the refund request');
+  }
 
   return results;
 }

@@ -16,9 +16,10 @@ import { checkJava } from './harness/java.mjs';
 import { checkNode } from './harness/node.mjs';
 import { checkGo } from './harness/go.mjs';
 import { checkPython } from './harness/python.mjs';
+import { checkPhp } from './harness/php.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const RUNNERS = { java: checkJava, node: checkNode, go: checkGo, python: checkPython };
+const RUNNERS = { java: checkJava, node: checkNode, go: checkGo, python: checkPython, php: checkPhp };
 
 function parseArgs(argv) {
   const out = { langs: Object.keys(RUNNERS), strict: !!process.env.WAFFO_HARNESS_STRICT };

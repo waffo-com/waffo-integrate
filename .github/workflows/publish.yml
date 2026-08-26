@@ -56,11 +56,15 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer
 
       - name: Unit tests (enforcement verifier)
         run: npm run test:unit
 
-      - name: Template compile harness (strict — all 4 languages must compile before publish)
+      - name: Template compile harness (strict — all 5 languages must compile before publish)
         run: node tests/compile-templates.mjs --strict
         env:
           WAFFO_HARNESS_STRICT: '1'

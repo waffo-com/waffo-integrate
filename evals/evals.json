@@ -940,6 +940,56 @@
           "critical": true
         }
       ]
+    },
+    {
+      "id": 36,
+      "prompt": "I am building a PHP backend (Laravel). I need to integrate Waffo payment — accept credit card payments, handle refunds, and receive webhook notifications. Project is at ./my-project, credentials are in .env.",
+      "expected_output": "Generate PHP code using the waffo/waffo-php Composer package (composer require waffo/waffo-php). Order create generates paymentRequestId with bin2hex(random_bytes(16)) (32 hex chars). Payload array keys are camelCase (orderCurrency, orderAmount, paymentRequestId, userInfo, paymentInfo). SDK entry is new Waffo(new WaffoConfig(...)) with Environment::Sandbox; responses are read via properties (isSuccess(), code, data) with no getCode()/getData() getters. Write operations catch Waffo\\Exception\\WaffoUnknownStatusError and recover via the matching inquiry() with the SAME request ID. Webhook registers ->onPayment()/->onRefund() and calls ->handleWebhook($body, $signature), returning HTTP 200 with responseBody and the X-SIGNATURE (responseSignature) header.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "php_composer_package",
+          "type": "output_contains",
+          "check": "Uses the waffo/waffo-php Composer package (composer require waffo/waffo-php) with `use Waffo\\Waffo; use Waffo\\Config\\WaffoConfig; use Waffo\\Config\\Environment;`",
+          "critical": true
+        },
+        {
+          "name": "php_request_id_bin2hex",
+          "type": "output_contains",
+          "check": "Generates request IDs with bin2hex(random_bytes(16)) (32 hex chars) — NOT a dashed 36-char UUID",
+          "critical": true
+        },
+        {
+          "name": "php_camelCase_payload_keys",
+          "type": "output_contains",
+          "check": "Payload array keys use camelCase: paymentRequestId, orderCurrency, orderAmount, userInfo, paymentInfo (NOT snake_case keys)",
+          "critical": true
+        },
+        {
+          "name": "php_response_property_access",
+          "type": "output_contains",
+          "check": "Reads ApiResponse via ->isSuccess() and properties ->code / ->message / ->data — does NOT call getCode()/getMessage()/getData() (the PHP SDK has no getters)",
+          "critical": true
+        },
+        {
+          "name": "php_environment_enum",
+          "type": "output_contains",
+          "check": "Selects environment with the Environment::Sandbox / Environment::Production enum, NOT the strings SANDBOX/PRODUCTION",
+          "critical": true
+        },
+        {
+          "name": "php_unknown_status_recovery",
+          "type": "output_contains",
+          "check": "Wraps write operations (order()->create, order()->refund, order()->cancel) in try/catch (WaffoUnknownStatusError) and recovers via the matching inquiry() with the SAME request ID",
+          "critical": true
+        },
+        {
+          "name": "php_webhook_arrow_registration",
+          "type": "output_contains",
+          "check": "Webhook registers handlers via ->onPayment(...)->onRefund(...) and calls ->handleWebhook($body, $signature), then returns HTTP 200 with responseBody and the X-SIGNATURE header set to responseSignature and Content-Type application/json",
+          "critical": true
+        }
+      ]
     }
   ]
 }
