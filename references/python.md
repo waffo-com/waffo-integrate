@@ -263,7 +263,8 @@ def refund_order(
     acquiring_order_id: str,
     refund_amount: str,
     refund_currency: str,
-    refund_reason: str | None = None,
+    refund_notify_url: str,
+    refund_reason: str,
 ) -> dict[str, Any]:
     """
     Refund a paid order.
@@ -282,9 +283,10 @@ def refund_order(
         "acquiringOrderId": acquiring_order_id,
         "refundAmount": refund_amount,
         "refundCurrency": refund_currency,
+        # REQUIRED for REFUND_NOTIFICATION delivery — does NOT fall back to the order's notifyUrl.
+        "refundNotifyUrl": refund_notify_url,
+        "refundReason": refund_reason,
     }
-    if refund_reason:
-        payload["refundReason"] = refund_reason
 
     try:
         response = waffo.order().refund(payload)

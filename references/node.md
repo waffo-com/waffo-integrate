@@ -168,13 +168,15 @@ function genRequestId(): string {
 export async function refundOrder(
   acquiringOrderId: string,
   refundAmount: string,
-  refundReason?: string,
+  refundNotifyUrl: string,   // REQUIRED for REFUND_NOTIFICATION delivery — does NOT fall back to the order's notifyUrl
+  refundReason: string,      // required by the API
 ) {
   const waffo = getWaffo();
   const response = await waffo.order().refund({
     refundRequestId: genRequestId(),
     acquiringOrderId,
     refundAmount,
+    refundNotifyUrl,
     refundReason,
   });
 

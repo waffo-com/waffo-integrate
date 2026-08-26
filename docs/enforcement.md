@@ -97,7 +97,7 @@ T2/T3 负责可机械验证的事实：feature 范围、必需 handler 注册、
 | `subscription` | `onSubscriptionStatus`、`onSubscriptionPeriodChanged`、subscription-aware `onPayment` 的语言对应写法 |
 | `subscriptionChange` | `onSubscriptionChange` / `on_subscription_change` / `OnSubscriptionChange` |
 
-validator 会移除注释和字符串后再识别 `.handler(...)` 调用，并排除测试目录与测试文件。只在 checklist、注释、event 常量或测试夹具中出现 handler 名不会通过。
+validator 会移除注释和字符串后再识别 `.handler(...)` / `->handler(...)` 调用（成员访问符 `.` / `->` / `::` 通用，覆盖 PHP 的箭头写法），并排除测试目录与测试文件。只在 checklist、注释、event 常量或测试夹具中出现 handler 名不会通过。
 
 ### 人工决策
 
@@ -211,7 +211,7 @@ Claude hook 只能拦截工具调用，不能拦截模型直接打印文字。Sk
 | 空 feature、漏 decision、漏 phase/test/evidence | 检出 | 阻断报告写入 |
 | 缺少实际 handler 注册 | 检出 | 阻断报告写入 |
 | 注释/字符串伪造 handler | 检出 | 阻断报告写入 |
-| Go/Java/Node/Python handler 命名差异 | 支持 | 支持 |
+| Go/Java/Node/Python/PHP handler 命名差异（`.` / `->` / `::` 成员访问符） | 支持 | 支持 |
 | 原始 36 字符 UUID request ID | 检出 | 阻断报告写入 |
 | 人工回答是否来自当前 Claude 用户消息 | 无 transcript 时只能校验结构 | 通过 transcript 认证 |
 | 业务逻辑和测试结果本身是否真实正确 | 需要 review/E2E | 需要 review/E2E |

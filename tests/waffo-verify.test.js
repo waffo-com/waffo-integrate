@@ -218,6 +218,22 @@ test('valid Go registrations are accepted', () => {
   assert.strictEqual(result.status, 0, result.stdout);
 });
 
+test('valid PHP arrow registrations are accepted', () => {
+  const root = fixture();
+  write(root, 'src/Webhook/WaffoWebhook.php', [
+    '<?php',
+    '$waffo->subscription()->create([]);',
+    '$waffo->webhook()',
+    '    ->onPayment(static function (array $event): void {})',
+    '    ->onSubscriptionStatus(static function (array $event): void {})',
+    '    ->onSubscriptionPeriodChanged(static function (array $event): void {})',
+    '    ->handleWebhook($body, $signature);',
+  ].join('\n'));
+  saveManifest(root, advisoryManifest(['subscription']));
+  const result = runVerify(root);
+  assert.strictEqual(result.status, 0, result.stdout);
+});
+
 test('empty decision register cannot bypass required questions', () => {
   const root = fixture();
   write(root, 'src/integration.js', 'waffo.order().create({});\nwaffo.webhook().onPayment(() => {});\n');

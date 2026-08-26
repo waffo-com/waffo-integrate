@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.6.0] - 2026-08-26
+
+### Added
+
+- **PHP support** — `references/php.md` templates for the published `waffo/waffo-php` Composer package (SDK init + `Waffo::fromEnvironment()`, order/refund/subscription/config services, framework-agnostic + Laravel + Symfony webhook handlers, and a Sandbox integration test), driven end to end by the skill's 8-step flow. `SKILL.md` gains PHP across Step 1 detection (`composer.json`), Step 2 naming notes (camelCase methods, property-based `ApiResponse` access, `Environment::Sandbox` enum), Step 3 frameworks (Laravel/Symfony/Slim), Step 5 install (`composer require waffo/waffo-php`), and the Reference Loading Map.
+- **PHP template compile gate** — `tests/harness/php.mjs` extracts the `php.md` templates, resolves the pinned published SDK via Composer, and runs `php -l` + PHPStan (level 5) against it; wired into `tests/compile-templates.mjs` and both CI workflows (`shivammathur/setup-php`), so the release gate now compiles all **five** languages before publish. `static-spec.mjs` extends its deterministic order-create / subscription-create / cancel-by-`subscriptionId` assertions to PHP, and `extract.mjs` learns the `php` fence.
+- **`docs/adding-a-language.md`** — a mechanical checklist for adding the next SDK language, documenting what is irreducibly per-language (templates, harness adapter, CI toolchain) versus what is now data-driven.
+- Eval 31: PHP Laravel payment + refund + webhook, guarding the PHP-specific pitfalls (property access vs getters, `Environment` enum vs strings, `bin2hex(random_bytes(16))` request IDs, `->onPayment` arrow registration).
+
+### Fixed
+
+- **Webhook handler-registration scan now recognizes PHP.** `bin/waffo-verify.js` matched only the `.onPayment(` (dot) member-access operator, so a real PHP registration (`$waffo->webhook()->onPayment(...)`, which uses `->`) was invisible — every PHP integration would have been falsely blocked at the report gate for "missing required handler". The patterns are now derived generically over the `.` / `->` / `::` operators and the camelCase/snake_case/PascalCase spellings, so PHP works and future arrow/static-call languages need no validator change. Guarded by a new regression test.
+- **Refund templates now send `refundNotifyUrl` (Node/Java/Python; Go/PHP already did).** `REFUND_NOTIFICATION` does NOT fall back to the order's `notifyUrl`, so omitting `refundNotifyUrl` on the refund request meant Waffo never sent the refund webhook — while the refund itself succeeded, so it failed silently and looked like a Waffo-side problem. Added `code-generation-rules.md` Rule 33 and a `static-spec.mjs` guard asserting all five languages' refund templates carry a refund notify URL, so this can never regress. `refundReason` is now sent unconditionally (API-required).
+- **Step 6 webhook verification discipline** (`references/integration-verification.md`): subscription/refund notifications are delivered asynchronously with delay + retries (not real-time like one-time payment), so a short wait is not evidence of non-delivery; keep the receiver (tunnel/server) alive until done; confirm the sender side in Datadog (`acquiring-order-service` `logRequest`) before concluding "not delivered"; a missing per-request notify URL is the most common cause; and captured Waffo-signed payloads can be replayed to verify handlers offline (signature is URL-independent).
+
 ## [1.5.1] - 2026-08-04
 
 ### Fixed

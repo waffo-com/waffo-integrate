@@ -6,3 +6,6 @@ CLAUDE.md
 
 # Local integration test sandbox (contains credentials + node_modules)
 waffo-integration-test/
+
+# Playwright MCP run artifacts (screenshots, snapshots, console logs)
+.playwright-mcp/

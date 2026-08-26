@@ -52,7 +52,7 @@ Copy `SKILL.md`, `references/`, `docs/`, and `bin/waffo-verify.js` into the same
 
 A guided integration flow with Step 6 verification:
 
-1. **Detects language and project status** — Node.js / Java / Go / Python; existing project or new scaffold
+1. **Detects language and project status** — Node.js / Java / Go / Python / PHP; existing project or new scaffold
 2. **Selects features and context** — payments, refunds, subscriptions, currency, and checkout decisions
 3. **Selects framework and events** — Express, Spring Boot, Gin, FastAPI, plus derived webhook handlers
 4. **Presents code for review** — shows complete integration code before writing
@@ -108,6 +108,7 @@ waffo-integrate/
 │   ├── java.md                           # Java/Spring Boot templates
 │   ├── go.md                             # Go templates
 │   ├── python.md                         # Python (FastAPI/Flask/Django) templates
+│   ├── php.md                            # PHP (Laravel/Symfony/Slim) templates
 │   ├── integration-verification.md       # Step 6 verification protocol
 │   ├── acceptance-criteria.md            # Test cards, Playwright scripts, report template
 │   ├── sandbox-knowledge.md              # Sandbox quirks (K024-K030)
@@ -119,16 +120,16 @@ waffo-integrate/
 │   ├── INDEX.md                          # Knowledge base index + remote fallback
 │   └── enforcement.md                    # Manifest schema + hook configuration
 ├── evals/
-│   └── evals.json                        # 30 prompt evals, 100 assertions
+│   └── evals.json                        # 31 prompt evals, 107 assertions
 └── tests/
     ├── waffo-verify.test.js              # Executable validator/hook regression tests
-    ├── compile-templates.mjs             # Four-language template gate
+    ├── compile-templates.mjs             # Five-language template gate
     └── harness/                          # SDK compilers + deterministic contract assertions
 ```
 
 ## Evaluation coverage
 
-The repo currently defines 30 prompt eval scenarios and 100 assertions, plus executable validator/hook regression tests:
+The repo currently defines 31 prompt eval scenarios and 107 assertions, plus executable validator/hook regression tests:
 
 | Eval | Scenario | Assertions | Result |
 |------|----------|-----------|--------|
@@ -162,6 +163,7 @@ The repo currently defines 30 prompt eval scenarios and 100 assertions, plus exe
 | 28 | Require goodsInfo and all order redirect URLs | 3 | Defined |
 | 29 | Keep Java subscription templates SDK-compatible | 3 | Defined |
 | 30 | Keep subscription description in productInfo | 2 | Defined |
+| 31 | PHP Laravel payment + refund + webhook | 7 | Defined |
 
 ## Requirements
 

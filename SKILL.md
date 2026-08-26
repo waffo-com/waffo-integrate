@@ -60,7 +60,7 @@ Claude Code 可选配 `bin/waffo-claude-hook.js`：它在 Write/Edit 正式报�
 | Subscription | `onSubscriptionStatus`, `onSubscriptionPeriodChanged`, subscription-aware `onPayment` | `SUBSCRIPTION_STATUS_NOTIFICATION`, `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION`, `PAYMENT_NOTIFICATION` |
 | Subscription Change (upgrade/downgrade) | `onSubscriptionChange` | `SUBSCRIPTION_CHANGE_NOTIFICATION` |
 
-Step 4 展示代码前和 Step 6 报告前，都要把必需集合与项目中的实际 SDK 注册调用逐项核对。`waffo-verify` 会忽略 manifest 自报的 handler、移除注释和字符串，并按 `features` 独立扫描 Node/Java/Go/Python 注册调用；缺少任一 handler 都会阻断正式报告。
+Step 4 展示代码前和 Step 6 报告前，都要把必需集合与项目中的实际 SDK 注册调用逐项核对。`waffo-verify` 会忽略 manifest 自报的 handler、移除注释和字符串，并按 `features` 独立扫描 Node/Java/Go/Python/PHP 注册调用（成员访问符 `.` / `->` / `::` 通用）；缺少任一 handler 都会阻断正式报告。
 
 ## 人工决策登记
 
@@ -105,6 +105,7 @@ Claude hook 会在当前 transcript 的真实 `user` 消息中查找每个 `CONF
 | Java integration patterns | `references/java.md` |
 | Go integration patterns | `references/go.md` |
 | Python integration patterns | `references/python.md` |
+| PHP integration patterns | `references/php.md` |
 | Step 6 verification protocol | `references/integration-verification.md` |
 | Report template and official cases | `references/acceptance-criteria.md` |
 | Sandbox quirks and simulator behavior | `references/sandbox-knowledge.md` |
@@ -125,6 +126,7 @@ Detect before asking:
 | `pom.xml` or `build.gradle` | Java |
 | `go.mod` | Go |
 | `pyproject.toml`, `requirements.txt`, `Pipfile`, `uv.lock`, or `setup.py` | Python |
+| `composer.json` | PHP |
 
 If ambiguous, ask for the language. Existing projects should reuse their layout and payment-provider patterns; new projects may use the default file structures in the language references.
 
@@ -141,6 +143,8 @@ Ask feature questions one at a time, in this order:
 | Payment Method Config | `payMethodConfig().inquiry()` |
 
 Python uses snake_case for these method names (`change_inquiry`, `merchant_config`, `pay_method_config`, `on_payment`, `on_subscription_status`, etc.) and snake_case for `Waffo.from_env()` / `WaffoConfig`. Payload **dict keys remain camelCase** in every language because the SDK sends them through to the API verbatim.
+
+PHP uses camelCase method names like Node/Java/Go (`->payMethodConfig()`, `->onPayment()`), reads responses via public properties (`$response->code` / `->message` / `->data`, with `isSuccess()` a method — there are no getters), selects the environment with the `Environment::Sandbox` / `Environment::Production` enum, and loads env config via `Waffo::fromEnvironment()`.
 
 Webhook is mandatory for payment integrations. Do not ask whether to add webhook; derive the handler set from the canonical **必需 Handler 清单** (top of this file) — it is the single source of truth, and the required-vs-registered result must be recorded in `.waffo/integration-manifest.json`.
 
@@ -170,6 +174,7 @@ Since webhook is auto-included, ask for the web framework when order payment or 
 | Java | Spring Boot | - |
 | Go | Gin | Echo, Fiber, Chi |
 | Python | FastAPI | Flask, Django |
+| PHP | Laravel | Symfony, Slim, plain PHP |
 
 For subscription event coverage, use the required events from the canonical **Required Handler Manifest** (top of this file); add `SUBSCRIPTION_CHANGE_NOTIFICATION` only when subscription upgrade/downgrade is integrated. Do not restate a different set here.
 
@@ -197,7 +202,7 @@ Before generating code, read:
 
 - `references/api-contract.md` for wire contracts.
 - `references/code-generation-rules.md` for generated-code guardrails.
-- The language reference: `references/node.md`, `references/java.md`, `references/go.md`, or `references/python.md`.
+- The language reference: `references/node.md`, `references/java.md`, `references/go.md`, `references/python.md`, or `references/php.md`.
 - Online docs from `https://waffo.com/docs/llms.txt` only if local references are missing or likely stale.
 
 Generated code must mirror existing payment integrations in the project (Stripe, PayPal, Creem, etc.) for route structure, config style, error handling, status transitions, fulfillment, refund revocation, and subscription lifecycle logic.
@@ -208,7 +213,7 @@ After developer approval:
 
 1. Install the SDK dependency using the language package manager.
 2. Add files into the project's existing architecture; use default structures from language references only for new or empty projects.
-3. Run the project's build/check command (`npm run build`, `mvn compile`, `go build ./...`, `python -m compileall .` or `ruff check && mypy`, etc.).
+3. Run the project's build/check command (`npm run build`, `mvn compile`, `go build ./...`, `python -m compileall .` or `ruff check && mypy`, `php -l` / `composer exec phpstan` / `composer test`, etc.).
 4. Emit or update `.waffo/integration-manifest.json`, then run `node <skill-dir>/bin/waffo-verify.js .` in the project root. Treat every `ERROR` as a blocker — fix the code (missing required handler, `UNRESOLVED` decision without a `WAFFO_DECISION_REQUIRED` stub, 36-char request ID, field contamination) and re-run until clean.
 5. After build success and a clean checker run, immediately start integration verification in the same response. Do not stop at “build passed” unless credentials, server, tunnel, or auth are missing.
 
@@ -220,6 +225,7 @@ SDK installation must use the current package version:
 | Java | Check Maven Central for `com.waffo:waffo-java`, then update the build file |
 | Go | Run `go get github.com/waffo-com/waffo-go@latest` |
 | Python | Check `pip index versions waffo` (or `https://pypi.org/pypi/waffo/json`), then install `waffo` (use `pip install --pre waffo` while it is a 0.x beta release) |
+| PHP | Check `composer show waffo/waffo-php --all` (or `https://repo.packagist.org/p2/waffo/waffo-php.json`), then run `composer require waffo/waffo-php` |
 
 If dependency install requires network and fails because of sandboxing, request approval and retry instead of guessing a stale version.
 
