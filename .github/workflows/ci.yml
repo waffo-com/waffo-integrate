@@ -32,7 +32,10 @@ jobs:
           python-version: '3.12'
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          # Lint the PHP templates on the SDK's minimum supported PHP (waffo/waffo-php ^8.0),
+          # so a template that slips in an 8.1-only feature (enum, readonly, first-class
+          # callable) fails here instead of silently breaking real 8.0 merchants.
+          php-version: '8.0'
           tools: composer
 
       - name: Unit tests (enforcement verifier)
