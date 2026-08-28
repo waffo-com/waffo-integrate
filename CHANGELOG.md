@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- **PHP support lowered to 8.0+** to track `waffo/waffo-php` v0.2.0 (published 2026-08-27), which replaced the SDK's native `enum`/`readonly` (PHP 8.1-only) with 8.0-safe polyfills while keeping the published API surface identical (`Environment::Sandbox`, named-arg `WaffoConfig`, public `ApiResponse` properties). `references/php.md` now states "Requires PHP 8.0+", corrects the "enum"/"readonly" notes to describe the polyfill classes, and documents the two new v0.2.0 methods (`wallet()->inquiry()`, `subscription()->update()`).
+- **PHP compile gate now runs on the SDK's minimum PHP (8.0), not 8.3.** `tests/harness/php.mjs` pins `waffo/waffo-php` `0.2.0` and widens the PHPUnit constraint to `^9.6 || ^10.5 || ^11.5` so composer stays resolvable on PHP 8.0 (→ 9.6). `.github/workflows/ci.yml` and `publish.yml` set `setup-php` to `8.0`, so a template that slips in an 8.1-only feature (enum, readonly, first-class callable, `never`) fails the gate instead of silently breaking real 8.0 merchants. Verified: all 11 `php.md` blocks `php -l`-clean on real PHP 8.0.30, and the SDK loads/instantiates (polyfill enums, all resources incl. `wallet()`, full webhook handler chain) on 8.0.
+
 ## [1.6.0] - 2026-08-26
 
 ### Added

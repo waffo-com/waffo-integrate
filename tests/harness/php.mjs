@@ -10,9 +10,12 @@ import path from 'node:path';
 import { extractBlocks, FENCE } from './extract.mjs';
 import { isFrameworkBlock, writeProject, run, has, tmpDir } from './util.mjs';
 
-const WAFFO_PHP_VERSION = '0.1.0';
+const WAFFO_PHP_VERSION = '0.2.0';
 const PHPSTAN_CONSTRAINT = '^2.1';
-const PHPUNIT_CONSTRAINT = '^11.5';
+// PHPUnit only supplies TestCase types for PHPStan to analyse the test template — no tests run.
+// The range keeps composer resolvable on the SDK's PHP floor (8.0 → 9.6; 8.2+ → 11.5) so the
+// gate can lint the templates against the minimum supported PHP, not just the CI default.
+const PHPUNIT_CONSTRAINT = '^9.6 || ^10.5 || ^11.5';
 const PHPSTAN_LEVEL = '5';
 // Optional path repository (a local waffo-php checkout) for offline/pinned runs.
 const LOCAL_SDK = process.env.WAFFO_PHP_SDK;

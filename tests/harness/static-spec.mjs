@@ -144,6 +144,13 @@ export function runStaticSpec(repoRoot) {
   assert('php: cancelSubscription recovery inquiry runs through the isSuccess validator',
     /subscription\(\)->inquiry\(\[["']subscriptionId/.test(phpSub) && /!\$response->isSuccess\(\)/.test(phpSub));
 
+  // --- change/inquiry requires BOTH originSubscriptionRequest AND subscriptionRequest
+  // (both required in the OpenAPI); passing only the origin fails live with A0003. ---
+  assert('php: change recovery changeInquiry passes both origin + change subscriptionRequest',
+    /->changeInquiry\(\[[\s\S]*?originSubscriptionRequest[\s\S]*?["']subscriptionRequest["'][\s\S]*?\]\)/.test(phpSub));
+  assert('python: change_inquiry passes both origin + change subscriptionRequest',
+    /change_inquiry\([\s\S]*?originSubscriptionRequest[\s\S]*?["']subscriptionRequest["'][\s\S]*?\)/.test(pySub));
+
   // --- refund must carry its own refund notify URL: REFUND_NOTIFICATION does NOT fall back to
   // the order's notifyUrl, so omitting it means Waffo never sends the refund webhook (fails silently). ---
   const refundBlocks = {

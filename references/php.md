@@ -6,7 +6,7 @@
 waffo/waffo-php
 ```
 
-Requires PHP 8.2+ with the `curl`, `json`, and `openssl` extensions. Install with:
+Requires PHP 8.0+ with the `curl`, `json`, and `openssl` extensions (as of `waffo/waffo-php` v0.2.0; v0.1.x required 8.2+). Install with:
 
 ```
 composer require waffo/waffo-php
@@ -15,9 +15,10 @@ composer require waffo/waffo-php
 ## PHP-specific notes
 
 - **Method names are camelCase** (`->order()`, `->payMethodConfig()`, `->onPayment()`), the same as Node/Java/Go. Payload keys stay camelCase (`orderCurrency`, `subscriptionManagementUrl`) because the SDK forwards them to the API verbatim.
-- **`ApiResponse` exposes public readonly properties**, not getters: `$response->isSuccess()` is a method, but the payload is read as `$response->code`, `$response->message`, and `$response->data`. `data` is `mixed` (an associative array on success), so guard with `is_array(...)` before reading fields.
-- **Environment is an enum**: `Environment::Sandbox` / `Environment::Production` (not `SANDBOX`/`PRODUCTION` strings).
+- **`ApiResponse` exposes public properties**, not getters: `$response->isSuccess()` is a method, but the payload is read as `$response->code`, `$response->message`, and `$response->data`. `data` is `mixed` (an associative array on success), so guard with `is_array(...)` before reading fields.
+- **Environment**: pass `Environment::Sandbox` / `Environment::Production` (or the plain strings `'sandbox'` / `'production'` — `WaffoConfig` accepts `Environment|string`, not the uppercase `SANDBOX`/`PRODUCTION`). On v0.2.0 these are 8.0-safe polyfill constants on a `final class Environment`, **not a native `enum`** (native enums require PHP 8.1); usage is unchanged from v0.1.x (`->value` / `->name` / `baseUrl()` still work).
 - **Unknown status** throws `Waffo\Exception\WaffoUnknownStatusError` (a subclass of `WaffoError`); recover with a same-key inquiry rather than blindly retrying the write.
+- **v0.2.0 also exposes** `wallet()->inquiry(...)` (wallet balance/info) and `subscription()->update(...)` alongside `change()`/`changeInquiry()`; the published API surface (method names, named-arg `WaffoConfig`, `Environment::Sandbox`, public `ApiResponse` props) is otherwise identical to v0.1.x, so these templates compile unchanged against both.
 
 ## SDK Initialization
 
@@ -444,8 +445,12 @@ final class SubscriptionService
         try {
             $response = $waffo->subscription()->change($params);
         } catch (WaffoUnknownStatusError) {
+            // change/inquiry requires BOTH originSubscriptionRequest AND the change's own
+            // subscriptionRequest (both marked required in the OpenAPI); passing only the
+            // origin fails validation with A0003 "subscriptionRequest must not be blank".
             $response = $waffo->subscription()->changeInquiry([
                 'originSubscriptionRequest' => $input['originSubscriptionRequest'],
+                'subscriptionRequest' => $params['subscriptionRequest'],
             ]);
         }
 
