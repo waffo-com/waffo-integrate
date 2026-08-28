@@ -1,11 +1,15 @@
 # Changelog
 
-## [Unreleased]
+## [1.7.0] - 2026-08-28
 
 ### Changed
 
 - **PHP support lowered to 8.0+** to track `waffo/waffo-php` v0.2.0 (published 2026-08-27), which replaced the SDK's native `enum`/`readonly` (PHP 8.1-only) with 8.0-safe polyfills while keeping the published API surface identical (`Environment::Sandbox`, named-arg `WaffoConfig`, public `ApiResponse` properties). `references/php.md` now states "Requires PHP 8.0+", corrects the "enum"/"readonly" notes to describe the polyfill classes, and documents the two new v0.2.0 methods (`wallet()->inquiry()`, `subscription()->update()`).
 - **PHP compile gate now runs on the SDK's minimum PHP (8.0), not 8.3.** `tests/harness/php.mjs` pins `waffo/waffo-php` `0.2.0` and widens the PHPUnit constraint to `^9.6 || ^10.5 || ^11.5` so composer stays resolvable on PHP 8.0 (→ 9.6). `.github/workflows/ci.yml` and `publish.yml` set `setup-php` to `8.0`, so a template that slips in an 8.1-only feature (enum, readonly, first-class callable, `never`) fails the gate instead of silently breaking real 8.0 merchants. Verified: all 11 `php.md` blocks `php -l`-clean on real PHP 8.0.30, and the SDK loads/instantiates (polyfill enums, all resources incl. `wallet()`, full webhook handler chain) on 8.0.
+
+### Fixed
+
+- **`references/php.md` `changeSubscription` recovery now passes the required `subscriptionRequest` to `changeInquiry`.** `/subscription/change/inquiry` requires **both** `originSubscriptionRequest` and `subscriptionRequest` in the OpenAPI; the old recovery passed only the origin, which fails live with `A0003 "subscriptionRequest must not be blank"`. Confirmed against the live Sandbox API on real PHP 8.0.30 (both fields → `subscriptionChangeStatus=SUCCESS`). `tests/harness/static-spec.mjs` gains guards asserting the PHP and Python `changeInquiry` calls carry both identifiers, so the drift cannot return. (Node/Java never call `changeInquiry` — their change failure throws; Go/Python were already correct.)
 
 ## [1.6.0] - 2026-08-26
 
