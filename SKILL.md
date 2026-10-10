@@ -246,7 +246,7 @@ Phases:
 | C2 | Subscription create, inquiry, renewal, cancel; notification tests for `SUBSCRIPTION_STATUS_NOTIFICATION`, `SUBSCRIPTION_PERIOD_CHANGED_NOTIFICATION`, `PAYMENT_NOTIFICATION`; change/changeInquiry and `SUBSCRIPTION_CHANGE_NOTIFICATION` if upgrade/downgrade is integrated |
 | D | Passive verification, skill compliance review, Waffo-team-facing report |
 
-Before Phase A, output an Integration Test Plan Gate that maps the project's integrated Waffo features to required/optional tests. This gate is project-integration scoped, not an SDK release matrix. Fix the plan before execution if any required integrated-feature test is missing. If the developer or business owner gives a stricter coverage requirement, record `Coverage Basis: business-defined scope`; otherwise default to `Coverage Basis: minimum test set`.
+Phase A 前输出 Integration Test Plan Gate，将项目实际接入的 Waffo 接口与回调映射到必测/条件测试。按 `references/sdk-acceptance-coverage.json` 核对 `orderInquiry`、`orderCancel`、`orderCapture`、`subscriptionUpdate`、`subscriptionManage`、`merchantConfig`、`wallet` 等条件 feature；不能只按支付/退款/订阅三个大类选测试。未接入接口不要求执行，已接入接口漏测必须先补计划。SDK 发布与每日文档同步会从 SDK 能力真源查漏，新增接口/回调还必须补 Excel 及三语验收说明。这是项目集成验收，不是 SDK 全量发布测试。业务要求更严格时记录 `Coverage Basis: business-defined scope`，否则用 `Coverage Basis: minimum test set`。
 
 The minimum pay-method set comes from active contracted methods returned by `payMethodConfig().inquiry()` and must include representatives for card, e-wallet/app-class, VA/bank, special params such as PIX/OVO, and device-wallet manual/device handling. This is a technical minimum coverage set, not an automatic business-acceptance verdict. List every contracted method in the final report.
 

@@ -22,6 +22,7 @@ const IDENTIFIER_VALUES = {
   originSubscriptionRequest: 'subreq-20260803-origin',
   subscriptionRequest: 'subreq-20260803-new',
   subscriptionId: 'sub-20260803-0001',
+  merchantId: 'merchant-20260803-0001',
 };
 
 function fixture() {
@@ -522,6 +523,89 @@ test('required test ids match acceptance-criteria vocabulary', () => {
   for (const id of everyTestId) {
     assert.ok(contract.TEST_IDENTIFIER_REQUIREMENTS[id]?.length, `${id} must declare required business identifiers`);
   }
+});
+
+const CONDITIONAL_SOURCE = [
+  'waffo.order().inquiry({});',
+  'waffo.order().cancel({});',
+  'waffo.order().capture({});',
+  'waffo.subscription().create({});',
+  'waffo.subscription().update({});',
+  'waffo.subscription().manage({});',
+  'waffo.merchantConfig().inquiry({});',
+  'waffo.wallet().inquiry({});',
+  'waffo.webhook().onPayment(() => {});',
+  'waffo.webhook().onSubscriptionStatus(() => {});',
+  'waffo.webhook().onSubscriptionPeriodChanged(() => {});',
+].join('\n');
+const CONDITIONAL_FEATURES = ['orderInquiry', 'orderCancel', 'orderCapture', 'subscription', 'subscriptionUpdate', 'subscriptionManage', 'merchantConfig', 'wallet'];
+
+test('cancel-only integration does not require a payment handler', () => {
+  const root = fixture();
+  write(root, 'src/integration.js', 'waffo.order().cancel({});');
+  saveManifest(root, manifest(['orderCancel']));
+  assert.strictEqual(runVerify(root, '--gate', 'report').status, 0);
+});
+
+test('all declared conditional interfaces require real current-run tests', () => {
+  const root = fixture();
+  write(root, 'src/integration.js', CONDITIONAL_SOURCE);
+  saveManifest(root, manifest(CONDITIONAL_FEATURES));
+  assert.strictEqual(runVerify(root, '--gate', 'report').status, 0);
+  const data = manifest(CONDITIONAL_FEATURES);
+  data.tests = data.tests.filter((item) => item.id !== 'subscription-update');
+  saveManifest(root, data);
+  const result = runVerify(root, '--gate', 'report');
+  assert.strictEqual(result.status, 2);
+  assert.match(result.stderr, /subscription-update/);
+});
+
+test('a conditionally integrated interface cannot be omitted from the manifest', () => {
+  const root = fixture();
+  write(root, 'src/integration.js', 'waffo.subscription().update({});\nwaffo.webhook().onPayment(() => {});\n');
+  saveManifest(root, manifest(['order']));
+  const result = runVerify(root, '--gate', 'report');
+  assert.strictEqual(result.status, 2);
+  assert.match(result.stderr, /Code uses "subscriptionUpdate"/);
+});
+
+test('conditional feature discovery covers Node, Java, Go, Python and PHP spellings', () => {
+  for (const [name, source] of [
+    ['integration.js', 'waffo.merchantConfig().inquiry({});'],
+    ['Integration.java', 'waffo.merchantConfig().inquiry(request);'],
+    ['integration.go', 'waffo.MerchantConfig().Inquiry(request)'],
+    ['integration.py', 'waffo.merchant_config().inquiry(request)'],
+    ['integration.php', '$waffo->merchantConfig()->inquiry($request);'],
+  ]) {
+    const root = fixture();
+    write(root, 'src/' + name, source);
+    saveManifest(root, manifest(['wallet']));
+    const result = runVerify(root, '--gate', 'report');
+    assert.strictEqual(result.status, 2);
+    assert.match(result.stderr, /Code uses "merchantConfig"/, name);
+  }
+});
+
+test('subscription update requires subscription scope and real identifiers', () => {
+  const root = fixture();
+  write(root, 'src/integration.js', CONDITIONAL_SOURCE);
+  const data = manifest(CONDITIONAL_FEATURES);
+  data.features = data.features.filter((feature) => feature !== 'subscription');
+  saveManifest(root, data);
+  assert.match(runVerify(root, '--gate', 'report').stderr, /subscriptionUpdate.*requires "subscription"/);
+  const complete = manifest(CONDITIONAL_FEATURES);
+  delete complete.tests.find((item) => item.id === 'wallet-inquiry').identifiers.merchantId;
+  saveManifest(root, complete);
+  const result = runVerify(root, '--gate', 'report');
+  assert.strictEqual(result.status, 2);
+  assert.match(result.stderr, /wallet-inquiry.*identifiers\.merchantId/);
+});
+
+test('conditional interface text in comments and strings does not expand feature scope', () => {
+  const root = fixture();
+  write(root, 'src/integration.js', 'waffo.webhook().onPayment(() => {});\n// waffo.subscription().update({});\nconst example = "waffo.wallet().inquiry({})";');
+  saveManifest(root, manifest(['order']));
+  assert.strictEqual(runVerify(root, '--gate', 'report').status, 0);
 });
 
 test('manifest skillVersion that does not match the running skill blocks the report', () => {
