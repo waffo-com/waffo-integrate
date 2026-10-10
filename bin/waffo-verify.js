@@ -19,6 +19,13 @@ const FEATURE_REQUIRED_HANDLERS = {
   refund: ['onRefund'],
   subscription: ['onSubscriptionStatus', 'onSubscriptionPeriodChanged', 'onPayment'],
   subscriptionChange: ['onSubscriptionChange'],
+  orderInquiry: [],
+  orderCancel: [],
+  orderCapture: ['onPayment'],
+  subscriptionUpdate: ['onSubscriptionPeriodChanged', 'onPayment'],
+  subscriptionManage: [],
+  merchantConfig: [],
+  wallet: [],
 };
 
 // Member access spans languages: `.` (JS/TS/Go/Java/Python), `->` (PHP), `::` (static
@@ -57,6 +64,17 @@ const FEATURE_CODE_SIGNATURES = {
     /\.\s*(?:subscription|Subscription)\s*\(\s*\)\s*\.\s*(?:changeInquiry|change_inquiry|ChangeInquiry)\s*\(/,
   ],
 };
+
+// 条件接口沿用能力映射，识别各语言的方法拼写和成员访问符。
+const ACCEPTANCE_COVERAGE = require('../references/sdk-acceptance-coverage.json');
+for (const entry of Object.values(ACCEPTANCE_COVERAGE.operations)) {
+  if (FEATURE_CODE_SIGNATURES[entry.feature] || entry.testId === 'pay-method-coverage') continue;
+  const spellings = (name) => [...new Set([name, name[0].toUpperCase() + name.slice(1), name.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase())])].join('|');
+  FEATURE_CODE_SIGNATURES[entry.feature] = [new RegExp(
+    MEMBER_ACCESS + '\\s*(?:' + spellings(entry.capability) + ')\\s*\\(\\s*\\)\\s*' +
+    MEMBER_ACCESS + '\\s*(?:' + spellings(entry.sdkMethod) + ')\\s*\\(',
+  )];
+}
 
 const BASE_REQUIRED_DECISIONS = [
   'paymentSourceOfTruth',
@@ -108,6 +126,13 @@ const FEATURE_REQUIRED_TESTS = {
     'subscription-event-payment',
   ],
   subscriptionChange: ['subscription-change', 'subscription-change-inquiry', 'subscription-event-change'],
+  orderInquiry: ['order-inquiry'],
+  orderCancel: ['order-cancel'],
+  orderCapture: ['order-capture'],
+  subscriptionUpdate: ['subscription-update'],
+  subscriptionManage: ['subscription-manage'],
+  merchantConfig: ['merchant-config-inquiry'],
+  wallet: ['wallet-inquiry'],
 };
 
 // A PASS/USED test is only traceable when it names the Waffo objects exercised by that
@@ -132,6 +157,13 @@ const TEST_IDENTIFIER_REQUIREMENTS = {
   'subscription-change': ['originSubscriptionRequest', 'subscriptionRequest', 'subscriptionId'],
   'subscription-change-inquiry': ['originSubscriptionRequest', 'subscriptionRequest', 'subscriptionId'],
   'subscription-event-change': ['originSubscriptionRequest', 'subscriptionRequest', 'subscriptionId'],
+  'order-inquiry': ['paymentRequestId', 'acquiringOrderId'],
+  'order-cancel': ['paymentRequestId', 'acquiringOrderId'],
+  'order-capture': ['paymentRequestId', 'acquiringOrderId'],
+  'subscription-update': ['subscriptionRequest', 'subscriptionId'],
+  'subscription-manage': ['subscriptionRequest', 'subscriptionId'],
+  'merchant-config-inquiry': ['merchantId'],
+  'wallet-inquiry': ['merchantId'],
 };
 const PAY_METHOD_REQUIRED_IDENTIFIERS = ['paymentRequestId', 'acquiringOrderId'];
 
@@ -520,8 +552,10 @@ function runChecks(root, corpus, manifest, options = {}) {
       seenFeatures.add(feature);
     }
   }
-  if (seenFeatures.has('subscriptionChange') && !seenFeatures.has('subscription')) {
-    errors.push('Feature "subscriptionChange" requires "subscription" in the manifest.');
+  for (const feature of ['subscriptionChange', 'subscriptionUpdate', 'subscriptionManage']) {
+    if (seenFeatures.has(feature) && !seenFeatures.has('subscription')) {
+      errors.push(`Feature "${feature}" requires "subscription" in the manifest.`);
+    }
   }
 
   const inferredFeatures = inferFeaturesFromCode(corpus);

@@ -214,6 +214,23 @@ For non-card methods (e-wallets, bank transfers, etc.) in Sandbox:
 |----|----------|---------------|
 | subscription-change | **Subscription change** | If upgrade/downgrade is integrated, call project's endpoint backed by `POST /api/v1/subscription/change` → change succeeds. Verify: (1) change status updated in project database, (2) new plan/amount/period reflected in subscription record, (3) `SUBSCRIPTION_CHANGE_NOTIFICATION` received and processed. |
 | subscription-change-inquiry | **Change inquiry** | If upgrade/downgrade is integrated, call project's endpoint backed by `POST /api/v1/subscription/change/inquiry` → returns correct change status and updated subscription details matching the change request. |
+| subscription-event-change | **订阅变更通知** | 完成变更及必要授权，接收 `SUBSCRIPTION_CHANGE_NOTIFICATION`；验签后核对 `originSubscriptionRequest`、新的 `subscriptionRequest` 与 `subscriptionId`，更新对应订阅。重复通知不重复执行权益变更，失败通知不发放新权益。 |
+
+### 条件接口验收（只在项目实际接入时执行）
+
+| ID | 验收标准 | 验证步骤 |
+|----|----------|----------|
+| order-inquiry | **订单查询** | 调用 `order().inquiry()`，核对 `paymentRequestId`、`acquiringOrderId`、金额、币种及 `orderStatus` 与创建订单、终态通知和本地订单一致；Unknown 不按失败处理。 |
+| order-cancel | **取消订单** | 调用 `order().cancel()` 取消未支付订单，再查询确认 `ORDER_CLOSE`；对已支付订单取消失败时，不回滚已支付业务权益。记录原订单 ID。 |
+| order-capture | **预授权扣款** | 对支持 capture 的已授权订单调用 `order().capture()`，记录 `captureAmount`、原订单 ID 和响应 `orderStatus`，查询确认结果与实际扣款金额一致；失败或未知状态不发货，重复请求不重复履约。 |
+| subscription-update | **订阅金额更新** | 分别通过 `subscriptionRequest`、`subscriptionId` 调用 `subscription().update()`；覆盖 `amount`、`productInfo.scheduledAmounts` 和适用的 `trialPeriodAmount`。取得 manage URL，在 Sandbox 模拟后续目标周期，再以整数 `paymentDetails: 1` 查询，按数值比较每个目标 `period` 的 `orderAmount` 与更新计划；只核对更新响应不算生效验证。 |
+| subscription-manage | **订阅管理入口** | 调用 `subscription().manage()`，核对 `subscriptionRequest`、`subscriptionId`、`managementUrl` 与 `expiredAt`；在有效期内打开 URL，确认属于目标订阅，不与其他用户的订阅串单。 |
+| merchant-config-inquiry | **商户配置查询** | 调用 `merchantConfig().inquiry()`，使用本轮 `merchantId`，核对返回配置与该 MID 的签约配置一致；记录脱敏响应，不记录私钥或 API key。 |
+| wallet-inquiry | **收款地址查询** | 调用 `wallet().inquiry()`，核对返回的 `network`、`asset`、`payTo` 与请求网络、币种及平台收款地址一致。记录 `merchantId`；不得使用商户自行填写的地址替代返回值。 |
+
+`references/sdk-acceptance-coverage.json` 将 SDK `operationId` / Webhook 事件逐项映射到本节测试 ID、报告 feature 和 Excel 用例号。接口或回调新增时，必须一起更新真实操作步骤、断言、报告门禁及文档模板。SDK 仓库的 `scripts/verify-acceptance-coverage.js` 校验这些关系，不把“只新增映射行”视为完成。
+
+未接入的条件接口不要求商户执行；实际 SDK 调用被发现却未声明对应 feature 时，报告门禁阻断。Sandbox 不支持、需人工或需 Waffo 协助的场景必须保留本轮证据、原因和下一步，报告只能是 `CONDITIONAL`。
 
 ### Subscription — exception scenarios (verified during basic + change tests)
 
@@ -507,11 +524,11 @@ Do not include a `Commands Executed` section in the main Waffo-facing report.
 
 ---
 
-## §5 Official Test Cases (53 Items)
+## §5 历史基础用例（53 项）
 
 Source: Merchant Integration Test Cases v1.3 + Subscription Test Cases v2.2
 
-**Principle**: All 53 items retained. Active scenarios are tested automatically. Exception scenarios are passively verified (code review + observed during testing).
+保留以下 53 项基础用例，不把这个历史子集数量当作当前 Excel 完整用例总数。新增 SDK 能力的用例按 §3 和 `sdk-acceptance-coverage.json` 一并执行。主动场景实际测试，异常场景记录代码复核及实际观测证据；未执行不得标为通过。
 
 ### Payment Test Cases (29 items)
 

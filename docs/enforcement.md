@@ -165,7 +165,9 @@ Claude hook 对 schemaVersion 2 的项目额外执行两件事：写入内容与
 
 ### Feature 与 handler
 
-`features` 只能包含 `order`、`refund`、`subscription`、`subscriptionChange`。`subscriptionChange` 同时要求声明 `subscription`。
+`features` 支持 `order`、`refund`、`subscription`、`subscriptionChange`，以及条件接口 `orderInquiry`、`orderCancel`、`orderCapture`、`subscriptionUpdate`、`subscriptionManage`、`merchantConfig`、`wallet`。三个订阅条件 feature 同时要求声明 `subscription`。只对实际集成接口追加测试；未集成接口不会自动变为必测。
+
+此范围检查同时适用于 schemaVersion 1 和 2。已有项目若实际调用这些条件接口，升级后须把对应 feature 加入 manifest 并补测试，不必为此更改 schemaVersion。仅接入未支付订单取消时，`orderCancel` 不额外要求支付 handler；同时接入 `order` 时仍遵守它的既有 handler 要求。
 
 | Feature | validator 要求找到的可执行 SDK 注册调用 |
 |---|---|
@@ -173,6 +175,9 @@ Claude hook 对 schemaVersion 2 的项目额外执行两件事：写入内容与
 | `refund` | `onRefund` / `on_refund` / `OnRefund` |
 | `subscription` | `onSubscriptionStatus`、`onSubscriptionPeriodChanged`、subscription-aware `onPayment` 的语言对应写法 |
 | `subscriptionChange` | `onSubscriptionChange` / `on_subscription_change` / `OnSubscriptionChange` |
+| `orderCapture` | `onPayment` 的语言对应写法 |
+| `subscriptionUpdate` | `onSubscriptionPeriodChanged`、`onPayment` 的语言对应写法 |
+| `orderInquiry`、`subscriptionManage`、`merchantConfig`、`wallet` | 不额外要求 handler |
 
 validator 会移除注释和字符串后再识别 `.handler(...)` / `->handler(...)` 调用（成员访问符 `.` / `->` / `::` 通用，覆盖 PHP 的箭头写法），并排除测试目录与测试文件。只在 checklist、注释、event 常量或测试夹具中出现 handler 名不会通过。
 
@@ -220,6 +225,13 @@ Claude hook 会把当前 Claude transcript 传给 validator。validator 必须�
   - `refund`：`refund-success`、`refund-inquiry`、`refund-webhook`
   - `subscription`：`subscription-create`、`subscription-inquiry`、`subscription-renewal`、`subscription-cancel`、`subscription-event-status`、`subscription-event-period-changed`、`subscription-event-payment`
   - `subscriptionChange`：`subscription-change`、`subscription-change-inquiry`、`subscription-event-change`
+  - `orderInquiry`：`order-inquiry`
+  - `orderCancel`：`order-cancel`
+  - `orderCapture`：`order-capture`
+  - `subscriptionUpdate`：`subscription-update`
+  - `subscriptionManage`：`subscription-manage`
+  - `merchantConfig`：`merchant-config-inquiry`
+  - `wallet`：`wallet-inquiry`
 
   `PASS`/`USED` 测试还必须通过 `identifiers` 记录本轮真实业务对象。字段名严格使用 API contract 的 camelCase；`-`、`N/A`、`unknown`、`xxx`、`{subscriptionId}` 等占位值不能通过：
 
@@ -233,6 +245,9 @@ Claude hook 会把当前 Claude transcript 传给 validator。validator 必须�
   | `subscription-inquiry`、`subscription-cancel`、`subscription-event-status`、`subscription-event-period-changed` | `subscriptionRequest`、`subscriptionId` | - |
   | `subscription-event-payment` | `subscriptionRequest`、`subscriptionId` | `paymentRequestId`、`acquiringOrderId` |
   | `subscription-change`、`subscription-change-inquiry`、`subscription-event-change` | `originSubscriptionRequest`、新的 `subscriptionRequest`、`subscriptionId` | - |
+  | `order-inquiry`、`order-cancel`、`order-capture` | `paymentRequestId`、`acquiringOrderId` | - |
+  | `subscription-update`、`subscription-manage` | `subscriptionRequest`、`subscriptionId` | - |
+  | `merchant-config-inquiry`、`wallet-inquiry` | `merchantId` | - |
 
   `payMethodCoverage` 中状态为 `PASS`/`USED` 的每个支付方式也必须记录 `paymentRequestId` 和 `acquiringOrderId`。人工、支持或跳过状态可能尚未产生业务 ID，因此仍按 `evidenceIds`、`reason`、`nextStep` 规则校验，不强制 `identifiers`。
 

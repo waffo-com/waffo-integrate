@@ -245,7 +245,7 @@ Before generating any test, read the project's code to understand:
 3. **Webhook handler**: Understand what business logic runs on payment success/failure (e.g., recharge balance, update order status)
 4. **Pay methods**: Call `payMethodConfig().inquiry()` using the project's SDK credentials to get the **actual contracted pay methods** (source of truth). Filter `currentStatus == "1"` only. If the project does not expose a local provider/admin helper, instantiate or use the Waffo SDK directly with the project's Sandbox credentials. Then apply the pay method simplification rules (§Pay Method Discovery) to build the minimum test set. If credentials exist but inquiry still fails, classify the issue as `FIXABLE_INFRA` or `WAFFO_SUPPORT_REQUIRED` and stop before pay-method coverage or final report generation.
 5. **Credentials**: Check env vars, config files, database options for Sandbox credentials
-6. **Feature scope**: Determine which features are integrated → map to applicable test items
+6. **接口与回调范围**：按 `sdk-acceptance-coverage.json` 将实际集成接口/事件映射到 §3 验收项及 Excel 用例号。检查条件 feature 是否漏报；新增接口不能仅沿用原支付/订阅测试。未集成项注明不适用，缺环境或需人工的项记录证据、原因和下一步。
 7. **payMethodType cross-check** (K029): Read project code to find what `payMethodType` / `payMethodName` values are passed in order/subscription create calls. Cross-compare with step 4's contracted list to produce the **checkout-available** methods. Only methods that are both contracted AND passed in `payMethodType` will appear on the checkout page. Flag mismatches in the summary.
 8. **Go-Live Questionnaire** — ask the developer these questions (answers feed into the report's Go-Live Readiness section):
 
